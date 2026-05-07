@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+</head>
+<body>
+
+  <h1>Login Betix</h1>
+
+  <input type="email" id="email" placeholder="Email">
+  <br><br>
+
+  <input type="password" id="password" placeholder="Password">
+  <br><br>
+
+  <button onclick="login()">Login</button>
+
+  <script>
+
+    async function login() {
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const response = await fetch('/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email,
+          password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        alert('Login berhasil');
+
+        window.location.href = '/';
+
+      } else {
+
+        alert('Login gagal');
+
+      }
+
+    }
+
+  </script>
+
+</body>
+</html>
