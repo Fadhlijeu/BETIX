@@ -1,879 +1,517 @@
 <!DOCTYPE html>
-
 <html lang="id">
-
 <head>
-
   <meta charset="UTF-8" />
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <title>BE TIX - Beli Tiket Bioskop Online</title>
-
   <link rel="icon" type="image/png" href="project/img/logo.png">
-
   <link rel="stylesheet" href="/css/style.css" />
-
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
+  <script>
+    (function () {
+      try {
+        var pathname = (window.location && window.location.pathname) ? window.location.pathname : '';
+        var isAuthPage = pathname === '/login.html' || pathname.endsWith('/login.html') || pathname === '/register.html' || pathname.endsWith('/register.html');
+        var userRaw = null;
+        try { userRaw = localStorage.getItem('user_session'); } catch (e) { userRaw = null; }
+        if (!userRaw && !isAuthPage) window.location.assign('/login.html');
+      } catch (err) { }
+    })();
+  </script>
+
+  <style>
+    .success-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.72);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .success-modal.is-open { display: flex; }
+    .success-modal-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--surface, #16163a);
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+      text-align: center;
+    }
+    .success-modal-icon { font-size: 44px; margin-bottom: 12px; }
+    .success-modal-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; color: var(--text,#f0f0ff); }
+    .success-modal-text { font-size: 13px; line-height: 1.7; color: var(--text-muted,#8888bb); margin-bottom: 18px; }
+    .success-modal-actions { display: grid; gap: 10px; }
+    .success-modal-close {
+      background: transparent;
+      border: 1px solid var(--border,rgba(255,255,255,0.08));
+      color: var(--text,#f0f0ff);
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    /* ✅ FIX: Film type filter chips */
+    #film-type-filters { margin-bottom: 10px; }
+  </style>
 </head>
-
 <body>
+  <div class="app" id="app">
 
+    <header class="header">
+      <div class="logo">BE<span>TIX</span></div>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Cari film, bioskop..." />
+      </div>
+      <div class="header-actions">
+        <button class="notif-btn" onclick="navigateTo('notif')" title="Notifikasi">
+          🔔
+          <span class="badge" id="notif-badge" style="display:none;">0</span>
+        </button>
+        <!-- ✅ Profile icon navigates to profil page -->
+        <button class="profile-btn" onclick="navigateTo('profil')">?</button>
+      </div>
+    </header>
 
+    <main class="content" id="main-content">
 
-<div class="app" id="app">
-
-
-
-  <!-- ===== HEADER ===== -->
-
-  <header class="header">
-
-    <div class="logo">BE<span>TIX</span></div>
-
-    <div class="search-bar">
-
-      <span class="search-icon">🔍</span>
-
-      <input type="text" id="search-input" placeholder="Cari film, bioskop..." />
-
-    </div>
-
-    <div class="header-actions">
-
-      <button class="notif-btn" onclick="navigateTo('notif')" title="Notifikasi">
-
-        🔔
-
-        <span class="badge" id="notif-badge">3</span>
-
-      </button>
-
-      <button class="profile-btn" onclick="navigateTo('profil')">AN</button>
-
-    </div>
-
-  </header>
-
-
-
-  <!-- ===== TOP NAV ===== -->
-
-  <nav class="nav" id="main-nav">
-
-    <div class="nav-item active" data-page="beranda" onclick="switchNav('beranda', this)">🏠 Beranda</div>
-
-    <div class="nav-item" data-page="film" onclick="switchNav('film', this)">🎬 Film</div>
-
-    <div class="nav-item" data-page="bioskop" onclick="switchNav('bioskop', this)">📍 Bioskop</div>
-
-    <div class="nav-item" data-page="etiket" onclick="switchNav('etiket', this)">🎟️ E-Ticket</div>
-
-    <div class="nav-item" data-page="promo" onclick="switchNav('promo', this)">🎉 Promo</div>
-
-    <div class="nav-item" data-page="profil" onclick="switchNav('profil', this)">👤 Profil</div>
-
-  </nav>
-
-
-
-  <!-- ===== MAIN CONTENT ===== -->
-
-  <main class="content" id="main-content">
-
-
-
-    <!-- PAGE: BERANDA -->
-
-    <div class="page active" id="page-beranda">
-
-      <div class="hero-banner" onclick="navigateTo('film-detail')">
-
-        <div class="hero-visual" style="background-image: url('img/interstellar.jpg');"></div>
-
-        <div class="hero-content">
-
-          <div class="hero-tag">Tayang Sekarang</div>
-
-          <h2 class="hero-title">Interstellar</h2>
-
-          <div class="hero-meta">
-
-            <span class="hero-rating">⭐ 8.2</span>
-
-            <span>Aksi · Sci-Fi</span>
-
-            <span>2j 20m</span>
-
+      <!-- BERANDA -->
+      <div class="page active" id="page-beranda">
+        <!-- ✅ FIX: Hero banner managed entirely by JS (no static onclick) -->
+        <div class="hero-banner" style="cursor:default;">
+          <div style="height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a0a2e,#2d1b69);">
+            <div style="text-align:center;color:rgba(255,255,255,0.4);font-size:13px;">Memuat film...</div>
           </div>
-
-          <button class="hero-btn" onclick="event.stopPropagation(); navigateTo('pesan')">Beli Tiket</button>
-
         </div>
 
-      </div>
-
-
-
-      <div class="ai-bubble" id="ai-recommendation">
-
-        <div class="ai-label">✨ Rekomendasi</div>
-
-        <div class="ai-text" id="ai-text">Memuat rekomendasi personal...</div>
-
-      </div>
-
-
-
-      <div class="section">
-
-        <div class="section-header">
-
-          <h3 class="section-title">Sedang Tayang</h3>
-
-          <button class="see-all" onclick="navigateTo('film')">Lihat Semua</button>
-
+        <div class="ai-bubble" id="ai-recommendation">
+          <div class="ai-label">✨ Rekomendasi</div>
+          <div class="ai-text" id="ai-text">Memuat rekomendasi...</div>
         </div>
 
-        <div class="movies-grid" id="now-playing"></div>
-
-      </div>
-
-
-
-      <div class="tix-vip-banner">
-
-        <div>
-
-          <div class="vip-title">⭐ TIX VIP Program</div>
-
-          <div class="vip-sub">Dapatkan poin &amp; cashback eksklusif</div>
-
-        </div>
-
-        <div class="vip-btn">Gabung</div>
-
-      </div>
-
-
-
-      <div class="section">
-
-        <div class="section-header">
-
-          <h3 class="section-title">Akan Datang</h3>
-
-          <button class="see-all" onclick="navigateTo('film')">Lihat Semua</button>
-
-        </div>
-
-        <div class="movies-grid" id="coming-soon"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: FILM -->
-
-    <div class="page" id="page-film">
-
-      <div class="section">
-
-        <div class="filters" id="genre-filters">
-
-          <div class="filter-chip active" onclick="filterGenre('semua', this)">Semua</div>
-
-          <div class="filter-chip" onclick="filterGenre('aksi', this)">Aksi</div>
-
-          <div class="filter-chip" onclick="filterGenre('drama', this)">Drama</div>
-
-          <div class="filter-chip" onclick="filterGenre('komedi', this)">Komedi</div>
-
-          <div class="filter-chip" onclick="filterGenre('horor', this)">Horor</div>
-
-          <div class="filter-chip" onclick="filterGenre('animasi', this)">Animasi</div>
-
-          <div class="filter-chip" onclick="filterGenre('scifi', this)">Sci-Fi</div>
-
-        </div>
-
-        <div class="movies-grid mt-12" id="all-movies"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: BIOSKOP -->
-
-    <div class="page" id="page-bioskop">
-
-      <div class="section">
-
-        <div class="form-group">
-
-          <label class="form-label">Pilih Kota</label>
-
-          <select class="form-select" id="kota-select" onchange="loadBioskop()">
-
-            <option value="jakarta">Jakarta</option>
-
-            <option value="surabaya">Surabaya</option>
-
-            <option value="bandung">Bandung</option>
-
-            <option value="bali">Bali</option>
-
-            <option value="tangerang">Tangerang Selatan</option>
-
-          </select>
-
-        </div>
-
-        <div class="bioskop-list" id="bioskop-list"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: E-TICKET -->
-
-    <div class="page" id="page-etiket">
-
-      <div class="section">
-
-        <div class="filters">
-
-          <div class="filter-chip active">Tiket Aktif</div>
-
-          <div class="filter-chip" onclick="navigateTo('riwayat')">Riwayat</div>
-
-        </div>
-
-        <div class="mt-16" id="etiket-list"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: PROMO -->
-
-    <div class="page" id="page-promo">
-
-      <div class="section">
-
-        <h3 class="section-title mb-14">Promo Spesial</h3>
-
-        <div class="promo-scroll" id="promo-list"></div>
-
-        <div class="divider"></div>
-
-        <h3 class="section-title mb-14">Cashback &amp; Voucher</h3>
-
-        <div id="voucher-list"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: PROFIL -->
-
-    <div class="page" id="page-profil">
-
-      <div class="section">
-
-        <div class="profile-card">
-
-          <div class="avatar-big">AN</div>
-
-          <div class="profile-name">Andi Nugroho</div>
-
-          <div class="profile-email">andi.nugroho@email.com</div>
-
-          <div class="profile-stats">
-
-            <div class="stat-item"><div class="stat-val gold">1.240</div><div class="stat-label">Poin</div></div>
-
-            <div class="stat-divider"></div>
-
-            <div class="stat-item"><div class="stat-val">12</div><div class="stat-label">Tiket</div></div>
-
-            <div class="stat-divider"></div>
-
-            <div class="stat-item"><div class="stat-val red">Gold</div><div class="stat-label">Member</div></div>
-
+        <div class="section">
+          <div class="section-header">
+            <h3 class="section-title">Sedang Tayang</h3>
+            <!-- ✅ FIX: Filter to now_playing only -->
+            <button class="see-all" onclick="BE_TIX.viewAllFilms('now_playing')">Lihat Semua</button>
           </div>
-
+          <div class="movies-grid" id="now-playing"></div>
         </div>
 
-        <div class="profile-menu">
-
-          <div class="profile-item" onclick="navigateTo('bayar')">
-
-  <span class="pi-icon">💳</span>
-
-  Metode Pembayaran
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-
-
-<div id="admin-panel" style="display:none">
-
-
-
-  <h2>ADMIN PANEL</h2>
-
-
-
-  <button onclick="alert('Tambah Film')">
-
-    Tambah Film
-
-  </button>
-
-
-
-</div>
-
-
-
-<div class="profile-item" onclick="navigateTo('riwayat')">
-
-  <span class="pi-icon">📄</span>
-
-  Riwayat Transaksi
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-
-
-<div class="profile-item" onclick="navigateTo('pengaturan')">
-
-  <span class="pi-icon">⚙️</span>
-
-  Pengaturan Akun
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-
-
-<div class="profile-item" onclick="navigateTo('faq')"
-
-  <span class="pi-icon">📱</span>
-
-  Bantuan & FAQ
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-
-
-<div class="profile-item" onclick="navigateTo('terms')"
-
-  <span class="pi-icon">📜</span>
-
-  Syarat & Ketentuan
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-
-
-<div class="profile-item danger" onclick="logout()">
-
-  <span class="pi-icon">🚪</span>
-
-  Logout
-
-  <span class="pi-arrow">›</span>
-
-</div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: NOTIFIKASI -->
-
-    <div class="page" id="page-notif">
-
-      <div class="section">
-
-        <h3 class="section-title mb-14">Notifikasi</h3>
-
-        <div id="notif-list"></div>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: FILM DETAIL -->
-
-    <div class="page" id="page-film-detail">
-
-      <div class="sub-header">
-
-        <button class="back-btn" onclick="goBack()">←</button>
-
-        <span class="sub-title">Detail Film</span>
-
-      </div>
-
-      <div class="section">
-
-        <div class="film-detail-top">
-
-          <div class="film-detail-poster" id="detail-poster">🎬</div>
-
-          <div class="film-detail-info">
-
-            <h2 class="film-detail-title" id="detail-title">Interstellar</h2>
-
-            <div class="tag-row" id="detail-tags"></div>
-
-            <div class="film-detail-meta" id="detail-meta"></div>
-
-            <div class="film-detail-rating" id="detail-rating"></div>
-
-            <button class="cta-btn mt-12" onclick="navigateTo('pesan')">🎟️ Beli Tiket</button>
-
+        <div class="tix-vip-banner">
+          <div>
+            <div class="vip-title">⭐ TIX VIP Program</div>
+            <div class="vip-sub">Dapatkan poin &amp; cashback eksklusif</div>
           </div>
-
+          <div class="vip-btn">Gabung</div>
         </div>
 
-        <div class="divider"></div>
-
-        <div class="synopsis-section">
-
-          <div class="synopsis-label">Sinopsis</div>
-
-          <div class="synopsis-text" id="synopsis-text">Memuat sinopsis via AI...</div>
-
+        <div class="section">
+          <div class="section-header">
+            <h3 class="section-title">Akan Datang</h3>
+            <!-- ✅ FIX: Filter to coming_soon only -->
+            <button class="see-all" onclick="BE_TIX.viewAllFilms('coming_soon')">Lihat Semua</button>
+          </div>
+          <div class="movies-grid" id="coming-soon"></div>
         </div>
-
       </div>
 
-    </div>
-
-
-
-    <!-- PAGE: PEMESANAN -->
-
-    <div class="page" id="page-pesan">
-
-      <div class="sub-header">
-
-        <button class="back-btn" onclick="goBack()">←</button>
-
-        <span class="sub-title">Pilih Jadwal</span>
-
+      <!-- FILM PAGE -->
+      <div class="page" id="page-film">
+        <div class="section">
+          <!-- ✅ FIX: Film type filter (Semua / Sedang Tayang / Akan Datang) -->
+          <div class="filters" id="film-type-filters">
+            <div class="filter-chip active" id="chip-semua" onclick="BE_TIX.viewAllFilms('semua')">Semua</div>
+            <div class="filter-chip" id="chip-now-playing" onclick="BE_TIX.viewAllFilms('now_playing')">🎬 Sedang Tayang</div>
+            <div class="filter-chip" id="chip-coming-soon" onclick="BE_TIX.viewAllFilms('coming_soon')">⏳ Akan Datang</div>
+          </div>
+          <!-- ✅ FIX: Genre chips rendered dynamically by render.js -->
+          <div class="filters" id="genre-filters" style="margin-top:4px;"></div>
+          <div class="movies-grid mt-12" id="all-movies"></div>
+        </div>
       </div>
 
-      <div class="section">
-
-        <div class="booking-form">
-
+      <!-- BIOSKOP -->
+      <div class="page" id="page-bioskop">
+        <div class="section">
           <div class="form-group">
-
-            <label class="form-label">Pilih Bioskop</label>
-
-            <select class="form-select" id="booking-cinema">
-
-              <option>CGV Grand Indonesia</option>
-
-              <option>XXI Senayan City</option>
-
-              <option>Cinepolis Living World</option>
-
-              <option>CGV Paris Van Java</option>
-
+            <label class="form-label">Pilih Kota / Bioskop</label>
+            <select class="form-select" id="kota-select">
+              <option value="">Belum ada bioskop tersedia</option>
             </select>
-
           </div>
+          <div class="bioskop-list" id="bioskop-list"></div>
+        </div>
+      </div>
 
-          <div class="form-group">
-
-            <label class="form-label">Pilih Tanggal</label>
-
-            <div class="date-picker" id="date-picker"></div>
-
+      <!-- E-TICKET -->
+      <div class="page" id="page-etiket">
+        <div class="section">
+          <div class="filters">
+            <div class="filter-chip active" onclick="navigateTo('etiket')">Tiket Aktif</div>
+            <div class="filter-chip" onclick="navigateTo('riwayat')">Riwayat</div>
           </div>
+          <div class="mt-16" id="etiket-list"></div>
+        </div>
+      </div>
 
-          <div class="form-group">
+      <!-- PROMO -->
+      <div class="page" id="page-promo">
+        <div class="section">
+          <h3 class="section-title mb-14">Promo Spesial</h3>
+          <div class="promo-scroll" id="promo-list"></div>
+          <div class="divider"></div>
+          <h3 class="section-title mb-14">Cashback &amp; Voucher</h3>
+          <div id="voucher-list"></div>
+        </div>
+      </div>
 
-            <label class="form-label">Pilih Jam Tayang</label>
-
-            <div id="showtime-list"></div>
-
+      <!-- PROFIL -->
+      <div class="page" id="page-profil">
+        <div class="section">
+          <div class="profile-card">
+            <div class="avatar-big">?</div>
+            <div class="profile-name">Memuat nama...</div>
+            <div class="profile-email">Memuat email...</div>
+            <div class="profile-stats">
+              <div class="stat-item"><div class="stat-val gold">0</div><div class="stat-label">Poin</div></div>
+              <div class="stat-divider"></div>
+              <div class="stat-item"><div class="stat-val">0</div><div class="stat-label">Tiket</div></div>
+              <div class="stat-divider"></div>
+              <div class="stat-item"><div class="stat-val red">Basic</div><div class="stat-label">Member</div></div>
+            </div>
           </div>
-
+          <div class="profile-menu">
+            <div class="profile-item" onclick="navigateTo('bayar')">
+              <span class="pi-icon">💳</span>Metode Pembayaran<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('pengaturan')">
+              <span class="pi-icon">⚙️</span>Pengaturan Akun<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('faq')">
+              <span class="pi-icon">📱</span>Bantuan &amp; FAQ<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('terms')">
+              <span class="pi-icon">📜</span>Syarat &amp; Ketentuan<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item danger" onclick="logout()">
+              <span class="pi-icon">🚪</span>Logout<span class="pi-arrow">›</span>
+            </div>
+          </div>
         </div>
-
-        <button class="cta-btn mt-16" onclick="navigateTo('kursi')">Pilih Kursi →</button>
-
       </div>
 
-    </div>
-
-
-
-    <!-- PAGE: PILIH KURSI -->
-
-    <div class="page" id="page-kursi">
-
-      <div class="sub-header">
-
-        <button class="back-btn" onclick="goBack()">←</button>
-
-        <span class="sub-title">Pilih Kursi</span>
-
-      </div>
-
-      <div class="section">
-
-        <div class="booking-info-bar">Interstellar · CGV Grand Indonesia · Studio 5 · 19:30</div>
-
-        <div class="screen-label">LAYAR</div>
-
-        <div class="seat-grid" id="seat-grid"></div>
-
-        <div class="seat-legend">
-
-          <div class="legend-item"><div class="legend-dot available"></div>Tersedia</div>
-
-          <div class="legend-item"><div class="legend-dot selected"></div>Dipilih</div>
-
-          <div class="legend-item"><div class="legend-dot taken"></div>Terisi</div>
-
-          <div class="legend-item"><div class="legend-dot vip"></div>VIP</div>
-
+      <!-- NOTIFIKASI -->
+      <div class="page" id="page-notif">
+        <div class="section">
+          <h3 class="section-title mb-14">Notifikasi</h3>
+          <div id="notif-list"></div>
         </div>
+      </div>
 
-        <div class="divider"></div>
-
-        <div class="seat-summary">
-
-          <span>Kursi: <strong id="selected-count">0</strong></span>
-
-          <span>Total: <strong class="gold-text" id="total-price">Rp 0</strong></span>
-
+      <!-- FILM DETAIL -->
+      <div class="page" id="page-film-detail">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Detail Film</span>
         </div>
-
-        <button class="cta-btn mt-16" onclick="navigateTo('bayar')">Lanjut Pembayaran →</button>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- PAGE: PEMBAYARAN -->
-
-    <div class="page" id="page-bayar">
-
-      <div class="sub-header">
-
-        <button class="back-btn" onclick="goBack()">←</button>
-
-        <span class="sub-title">Pembayaran</span>
-
-      </div>
-
-      <div class="section">
-
-        <div class="booking-form mb-16">
-
-          <div class="order-summary-title">Ringkasan Pesanan</div>
-
-          <div class="ticket-row"><span class="ticket-key">Film</span><span class="ticket-val">Interstellar</span></div>
-
-          <div class="ticket-row"><span class="ticket-key">Bioskop</span><span class="ticket-val">CGV Grand Indonesia</span></div>
-
-          <div class="ticket-row"><span class="ticket-key">Kursi</span><span class="ticket-val">D4, D5</span></div>
-
-          <div class="ticket-row"><span class="ticket-key">Harga Tiket</span><span class="ticket-val">2 × Rp 50.000</span></div>
-
-          <div class="ticket-row"><span class="ticket-key">Biaya Layanan</span><span class="ticket-val">Rp 4.000</span></div>
-
-          <div class="ticket-row no-border"><span class="ticket-key bold">Total</span><span class="ticket-val gold-text large">Rp 104.000</span></div>
-
+        <div class="section">
+          <div class="film-detail-top">
+            <div class="film-detail-poster" id="detail-poster">🎬</div>
+            <div class="film-detail-info">
+              <h2 class="film-detail-title" id="detail-title">Memuat judul...</h2>
+              <div class="tag-row" id="detail-tags"></div>
+              <div class="film-detail-meta" id="detail-meta"></div>
+              <div class="film-detail-rating" id="detail-rating"></div>
+              <button class="cta-btn mt-12" onclick="navigateTo('pesan')">🎟️ Beli Tiket</button>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="synopsis-section">
+            <div class="synopsis-label">Sinopsis</div>
+            <div class="synopsis-text" id="synopsis-text">Memuat sinopsis...</div>
+          </div>
         </div>
-
-        <div class="pay-section-title">Pilih Metode Pembayaran</div>
-
-        <div class="pay-methods" id="pay-methods"></div>
-
-        <button class="cta-btn gold mt-16" onclick="processPayment()">💳 Bayar Sekarang</button>
-
       </div>
 
-    </div>
-
-
-
-    <!-- PAGE: FAQ -->
-
-<div class="page" id="page-faq">
-
-  <div class="sub-header">
-
-    <button class="back-btn" onclick="goBack()">←</button>
-
-    <span class="sub-title">Bantuan & FAQ</span>
-
-  </div>
-
-
-
-  <div class="section">
-
-    <div class="faq-item">
-
-      <h4>Cara membeli tiket?</h4>
-
-      <p>Pilih film → pilih jadwal → pilih kursi → bayar.</p>
-
-    </div>
-
-
-
-    <div class="faq-item">
-
-      <h4>Bagaimana refund tiket?</h4>
-
-      <p>Refund dapat dilakukan maksimal 1 jam sebelum tayang.</p>
-
-    </div>
-
-
-
-    <div class="faq-item">
-
-      <h4>Apakah bisa pilih kursi?</h4>
-
-      <p>Ya, kursi dapat dipilih saat pemesanan.</p>
-
-    </div>
-
-  </div>
-
-  </div>
-
-   
-
-    <!-- PAGE: TERMS -->
-
-<div class="page" id="page-terms">
-
-  <div class="sub-header">
-
-    <button class="back-btn" onclick="goBack()">←</button>
-
-    <span class="sub-title">Syarat & Ketentuan</span>
-
-  </div>
-
-
-
-  <div class="section">
-
-    <p class="terms-text">
-
-      Dengan menggunakan aplikasi ini, pengguna menyetujui seluruh syarat penggunaan,
-
-      kebijakan privasi, dan ketentuan pembelian tiket bioskop yang berlaku.
-
-    </p>
-
-  </div>
-
-</div>
-
-
-
-    <!-- PAGE: PENGATURAN -->
-
-<div class="page" id="page-pengaturan">
-
-  <div class="sub-header">
-
-    <button class="back-btn" onclick="goBack()">←</button>
-
-    <span class="sub-title">Pengaturan Akun</span>
-
-  </div>
-
-
-
-  <div class="section">
-
-    <div class="profile-menu">
-
-
-
-      <div class="profile-item">
-
-        <span class="pi-icon">🌙</span>
-
-        Mode Gelap
-
-        <span class="pi-arrow">ON</span>
-
+      <!-- PESAN TIKET -->
+      <div class="page" id="page-pesan">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pilih Jadwal</span>
+        </div>
+        <div class="section">
+          <div class="booking-form">
+            <div class="form-group">
+              <label class="form-label">Pilih Bioskop</label>
+              <select class="form-select" id="booking-cinema">
+                <option value="">Belum ada bioskop tersedia</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pilih Tanggal</label>
+              <div class="date-picker" id="date-picker"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pilih Jam Tayang</label>
+              <div id="showtime-list"></div>
+            </div>
+          </div>
+          <button class="cta-btn mt-16" onclick="navigateTo('kursi')">Pilih Kursi →</button>
+        </div>
       </div>
 
-
-
-      <div class="profile-item">
-
-        <span class="pi-icon">🔔</span>
-
-        Notifikasi
-
-        <span class="pi-arrow">ON</span>
-
+      <!-- KURSI -->
+      <div class="page" id="page-kursi">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pilih Kursi</span>
+        </div>
+        <div class="section">
+          <div class="booking-info-bar">Pilih film, jadwal, dan bioskop terlebih dahulu</div>
+          <div class="screen-label">LAYAR</div>
+          <div class="seat-grid" id="seat-grid"></div>
+          <div class="seat-legend">
+            <div class="legend-item"><div class="legend-dot available"></div>Tersedia</div>
+            <div class="legend-item"><div class="legend-dot selected"></div>Dipilih</div>
+            <div class="legend-item"><div class="legend-dot taken"></div>Terisi</div>
+            <div class="legend-item"><div class="legend-dot vip"></div>VIP</div>
+          </div>
+          <div class="divider"></div>
+          <div class="seat-summary">
+            <span>Kursi: <strong id="selected-count">0</strong></span>
+            <span>Total: <strong class="gold-text" id="total-price">Rp 0</strong></span>
+          </div>
+          <button class="cta-btn mt-16" onclick="navigateTo('bayar')">Lanjut Pembayaran →</button>
+        </div>
       </div>
 
-
-
-      <div class="profile-item">
-
-        <span class="pi-icon">🌐</span>
-
-        Bahasa
-
-        <span class="pi-arrow">Indonesia</span>
-
+      <!-- BAYAR -->
+      <div class="page" id="page-bayar">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pembayaran</span>
+        </div>
+        <div class="section">
+          <div class="booking-form mb-16">
+            <div class="order-summary-title">Ringkasan Pesanan</div>
+            <div class="ticket-row"><span class="ticket-key">Film</span><span class="ticket-val" id="pay-film">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Bioskop</span><span class="ticket-val" id="pay-cinema">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Kursi</span><span class="ticket-val" id="pay-seats">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Harga Tiket</span><span class="ticket-val" id="pay-price">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Biaya Layanan</span><span class="ticket-val">Rp 3.000</span></div>
+            <div class="ticket-row no-border"><span class="ticket-key bold">Total</span><span class="ticket-val gold-text large" id="pay-total">-</span></div>
+          </div>
+          <div class="pay-section-title">Pilih Metode Pembayaran</div>
+          <div class="pay-methods" id="pay-methods"></div>
+          <button class="cta-btn gold mt-16" onclick="processPayment()">💳 Bayar Sekarang</button>
+        </div>
       </div>
 
+      <!-- FAQ -->
+      <div class="page" id="page-faq">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Bantuan &amp; FAQ</span>
+        </div>
+        <div class="section">
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Cara membeli tiket?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Pilih film, tentukan jadwal, pilih kursi, lalu selesaikan pembayaran.</p>
+          </div>
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Bagaimana refund tiket?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Kebijakan refund dapat disesuaikan oleh admin bioskop dan aturan transaksi yang berlaku.</p>
+          </div>
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Apakah bisa pilih kursi?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Ya. Kursi akan tampil otomatis setelah jadwal tayang dipilih.</p>
+          </div>
+        </div>
+      </div>
 
+      <!-- TERMS -->
+      <div class="page" id="page-terms">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Syarat &amp; Ketentuan</span>
+        </div>
+        <div class="section">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;line-height:1.8;color:var(--text-muted);font-size:13px;">
+            <p style="margin-bottom:12px;">Dengan menggunakan BE TIX, pengguna menyetujui syarat penggunaan, kebijakan privasi, dan ketentuan transaksi yang berlaku di platform.</p>
+            <p style="margin-bottom:12px;">Informasi film, jadwal, harga, promo, dan ketersediaan kursi dapat berubah sewaktu-waktu sesuai data yang ditambahkan oleh admin atau pihak bioskop.</p>
+            <p>BE TIX dapat menampilkan notifikasi, tiket digital, dan informasi akun berdasarkan aktivitas pengguna untuk mendukung pengalaman pemesanan yang lebih baik.</p>
+          </div>
+        </div>
+      </div>
 
-    </div>
+      <!-- PENGATURAN -->
+      <div class="page" id="page-pengaturan">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pengaturan Akun</span>
+        </div>
+        <div class="section">
+          <div class="profile-menu">
+            <div class="profile-item">
+              <span class="pi-icon">🌙</span>Mode Gelap<span class="pi-arrow">ON</span>
+            </div>
+            <div class="profile-item">
+              <span class="pi-icon">🔔</span>Notifikasi<span class="pi-arrow">ON</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <!-- RIWAYAT -->
+      <div class="page" id="page-riwayat">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Riwayat Tiket</span>
+        </div>
+        <div class="section">
+          <div id="riwayat-list"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ✅ FIX: Bottom nav — 4 items only, profile removed (accessible via header icon) -->
+    <nav class="bottom-bar">
+      <div class="bottom-item active" id="btn-beranda" onclick="switchNav('beranda', this, true)">
+        <span class="bottom-icon">🏠</span>
+        <span class="bottom-label">Beranda</span>
+      </div>
+      <div class="bottom-item" id="btn-film" onclick="switchNav('film', this, true)">
+        <span class="bottom-icon">🎬</span>
+        <span class="bottom-label">Film</span>
+      </div>
+      <div class="bottom-item" id="btn-bioskop" onclick="switchNav('bioskop', this, true)">
+        <span class="bottom-icon">📍</span>
+        <span class="bottom-label">Bioskop</span>
+      </div>
+      <div class="bottom-item" id="btn-etiket" onclick="switchNav('etiket', this, true)">
+        <span class="bottom-icon">🎟️</span>
+        <span class="bottom-label">E-Ticket</span>
+      </div>
+    </nav>
   </div>
 
-</div>
-
-
-
-    <!-- PAGE: RIWAYAT -->
-
-    <div class="page" id="page-riwayat">
-
-      <div class="sub-header">
-
-        <button class="back-btn" onclick="goBack()">←</button>
-
-        <span class="sub-title">Riwayat Tiket</span>
-
+  <!-- SUCCESS MODAL -->
+  <div id="success-modal" class="success-modal" aria-hidden="true">
+    <div class="success-modal-card">
+      <div class="success-modal-icon">✅</div>
+      <div class="success-modal-title">Pembayaran Berhasil</div>
+      <div class="success-modal-text">Tiket berhasil dibuat dan masuk ke E-Ticket. Silakan buka halaman tiket untuk melihat detail transaksi.</div>
+      <div class="success-modal-actions">
+        <button class="cta-btn" onclick="this.closest('.success-modal').classList.remove('is-open'); navigateTo('etiket');">Lihat Tiket</button>
+        <button class="success-modal-close" onclick="this.closest('.success-modal').classList.remove('is-open');">Tutup</button>
       </div>
-
-      <div class="section">
-
-        <div id="riwayat-list"></div>
-
-      </div>
-
     </div>
+  </div>
 
+  <script src="/js/data.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/render.js"></script>
+  <script src="/js/navigation.js"></script>
+  <script src="/js/app.js"></script>
 
+  <script>
+    function safeParseUser(raw) {
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
 
-  </main>
+    function getInitials(name, email) {
+      var source = '';
+      if (typeof name === 'string' && name.trim()) {
+        source = name.trim();
+      } else if (typeof email === 'string' && email.trim()) {
+        source = email.split('@')[0].replaceAll('.', ' ').replaceAll('_', ' ').replaceAll('-', ' ').trim();
+      }
+      if (!source) return '?';
+      var parts = source.split(' ').filter(Boolean);
+      var first = parts[0] ? parts[0].charAt(0) : '';
+      var second = parts.length > 1 ? parts[1].charAt(0) : (source.length > 1 ? source.charAt(1) : '');
+      return (first + second).toUpperCase() || '?';
+    }
 
+    function syncUserProfile() {
+      var user = null;
+      try { user = safeParseUser(localStorage.getItem('user_session')); } catch { }
+      var name = 'Pengguna';
+      var email = '';
+      if (user && typeof user === 'object') {
+        name = user.name || user.nama || user.username || name;
+        email = user.email || email;
+      }
+      var profileName = document.querySelector('#page-profil .profile-name');
+      var profileEmail = document.querySelector('#page-profil .profile-email');
+      var avatarBig = document.querySelector('#page-profil .avatar-big');
+      var headerProfileBtn = document.querySelector('.header-actions .profile-btn');
+      if (profileName) profileName.textContent = name;
+      if (profileEmail) profileEmail.textContent = email;
+      var initials = getInitials(name, email);
+      if (avatarBig) avatarBig.textContent = initials;
+      if (headerProfileBtn) headerProfileBtn.textContent = initials;
 
+      // Update profile stats from stored tickets
+      try {
+        var tickets = JSON.parse(localStorage.getItem('betix_active_tickets') || '[]');
+        var statTicket = document.querySelector('#page-profil .stat-val:not(.gold):not(.red)');
+        if (statTicket) statTicket.textContent = tickets.length;
+        if (user && user.points) {
+          var statPoin = document.querySelector('#page-profil .stat-val.gold');
+          if (statPoin) statPoin.textContent = user.points;
+        }
+      } catch { }
+    }
 
-  <!-- ===== BOTTOM BAR ===== -->
+    function logout() {
+      try { localStorage.removeItem('user_session'); } catch { }
+      window.location.assign('/login.html');
+    }
 
-  <nav class="bottom-bar">
+    // ✅ Update payment summary when navigating to bayar page
+    function updatePaymentSummary() {
+      try {
+        var state = window.BE_TIX && window.BE_TIX.state;
+        if (!state) return;
+        var filmEl = document.getElementById('pay-film');
+        var cinemaEl = document.getElementById('pay-cinema');
+        var seatsEl = document.getElementById('pay-seats');
+        var priceEl = document.getElementById('pay-price');
+        var totalEl = document.getElementById('pay-total');
+        if (filmEl && state.selectedMovie) filmEl.textContent = state.selectedMovie.title || '-';
+        if (cinemaEl && state.selectedCinema) cinemaEl.textContent = state.selectedCinema.name || '-';
+        if (seatsEl) seatsEl.textContent = (state.selectedSeats || []).join(', ') || '-';
+        var showtime = state.selectedShowtime;
+        var price = showtime ? Number(showtime.price || 50000) : 50000;
+        var count = (state.selectedSeats || []).length;
+        if (priceEl) priceEl.textContent = 'Rp ' + price.toLocaleString('id-ID') + ' x ' + count;
+        if (totalEl) totalEl.textContent = 'Rp ' + ((price * count) + 3000).toLocaleString('id-ID');
+      } catch { }
+    }
 
-    <div class="bottom-item active" id="btn-beranda" onclick="switchNav('beranda', this, true)">
+    document.addEventListener('DOMContentLoaded', function () {
+      syncUserProfile();
+    });
 
-      <span class="bottom-icon">🏠</span>
+    // Patch navigateTo to update payment summary when going to bayar
+    var _origNavigateTo = window.navigateTo;
+    window.navigateTo = function (page, opts) {
+      if (page === 'bayar') setTimeout(updatePaymentSummary, 50);
+      if (_origNavigateTo) _origNavigateTo(page, opts);
+    };
 
-      <span class="bottom-label">Beranda</span>
-
-    </div>
-
-    <div class="bottom-item" id="btn-film" onclick="switchNav('film', this, true)">
-
-      <span class="bottom-icon">🎬</span>
-
-      <span class="bottom-label">Film</span>
-
-    </div>
-
-    <div class="bottom-item" id="btn-bioskop" onclick="switchNav('bioskop', this, true)">
-
-      <span class="bottom-icon">📍</span>
-
-      <span class="bottom-label">Bioskop</span>
-
-    </div>
-
-    <div class="bottom-item" id="btn-etiket" onclick="switchNav('etiket', this, true)">
-
-      <span class="bottom-icon">🎟️</span>
-
-      <span class="bottom-label">E-Ticket</span>
-
-    </div>
-
-    <div class="bottom-item" id="btn-profil" onclick="switchNav('profil', this, true)">
-
-      <span class="bottom-icon">👤</span>
-
-      <span class="bottom-label">Profil</span>
-
-    </div>
-
-  </nav>
-
-
-
-</div>
-
-
-
-<!-- ===== SCRIPTS ===== -->
-
-<script src="/js/data.js"></script>
-
-<script src="/js/api.js"></script>
-
-<script src="/js/render.js"></script>
-
-<script src="/js/navigation.js"></script>
-
-<script src="/js/app.js"></script>
-
-
-
-<body>
-
+    window.syncUserProfile = syncUserProfile;
+    window.logout = logout;
+  </script>
+</body>
 </html>

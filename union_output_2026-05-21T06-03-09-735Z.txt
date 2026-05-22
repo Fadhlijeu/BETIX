@@ -1,3 +1,7 @@
+Path: D:\DOWNLOAD\betix-main\public\css
+
+1. style.css
+
 /* ============================================
    BE TIX — Main Stylesheet (Refactor)
    Clean layout, empty state, skeleton, booking,
@@ -1563,3 +1567,4 @@ button {
 #toast {
   transition: opacity 0.25s ease;
 }
+

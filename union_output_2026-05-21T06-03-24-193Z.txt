@@ -1,0 +1,1438 @@
+Path: D:\DOWNLOAD\betix-main\public
+
+1. admin.html
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BE TIX - Admin Panel</title>
+  <link rel="icon" type="image/png" href="project/img/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a1a;
+      --panel: #16163a;
+      --panel-2: #1e1e4a;
+      --line: rgba(255,255,255,0.08);
+      --text: #f0f0ff;
+      --muted: #8888bb;
+      --red: #E63946;
+      --gold: #FFB703;
+      --radius: 16px;
+      --shadow: 0 20px 45px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at top right, #17173a, var(--bg));
+      color: var(--text);
+    }
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: -0.5px;
+    }
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 16px;
+    }
+    .sidebar,
+    .panel,
+    .card {
+      background: rgba(22, 22, 58, 0.88);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .sidebar {
+      padding: 14px;
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+    }
+    .side-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin: 8px 8px 12px;
+    }
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,0.04); }
+    .nav-btn.active {
+      background: rgba(230,57,70,0.14);
+      color: #fff;
+      outline: 1px solid rgba(230,57,70,0.25);
+    }
+    .main { display: grid; gap: 16px; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      padding: 16px;
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .stat .value { font-size: 24px; font-weight: 800; }
+    .panel { padding: 18px; }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .panel-head h2 { margin: 0; font-size: 20px; }
+    .panel-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      border: 0;
+      cursor: pointer;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      transition: 0.2s ease;
+    }
+    .btn-primary { background: var(--red); color: #fff; }
+    .btn-primary:hover { filter: brightness(0.96); }
+    .btn-ghost { background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid var(--line); }
+    .btn-danger { background: rgba(230,57,70,0.12); color: #ffb7bf; border: 1px solid rgba(230,57,70,0.28); }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .tab {
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .tab.active { background: rgba(255,183,3,0.12); color: #fff; border-color: rgba(255,183,3,0.25); }
+    .section { display: none; }
+    .section.active { display: block; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .field { display: grid; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      outline: none;
+      font: inherit;
+    }
+    .field textarea { min-height: 96px; resize: vertical; }
+    .table-wrap { overflow: auto; border-radius: 14px; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; background: rgba(255,255,255,0.02); }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; background: rgba(255,255,255,0.03); }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.user { background: rgba(255,183,3,0.12); color: #ffd66b; }
+    .badge.admin { background: rgba(0,180,100,0.12); color: #7bf2b5; }
+    .badge.danger { background: rgba(230,57,70,0.12); color: #ffb7bf; }
+    .empty { padding: 24px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      background: rgba(22, 22, 58, 0.96);
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      display: none;
+      max-width: 320px;
+      z-index: 1000;
+    }
+    .toast.show { display: block; }
+    @media (max-width: 1080px) {
+      .grid { grid-template-columns: 1fr; }
+      .sidebar { position: relative; top: auto; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .shell { padding: 14px; }
+      .stats { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <h1>BE TIX Admin</h1>
+        <p>Kelola film, bioskop, jadwal, notifikasi, dan user dari satu tempat.</p>
+      </div>
+      <div class="pill" id="admin-info">Memeriksa sesi admin...</div>
+    </div>
+
+    <div class="grid">
+      <aside class="sidebar">
+        <div class="side-title">Menu</div>
+        <button class="nav-btn active" data-target="dashboard">Dashboard <span>›</span></button>
+        <button class="nav-btn" data-target="films">Film <span>›</span></button>
+        <button class="nav-btn" data-target="cinemas">Bioskop <span>›</span></button>
+        <button class="nav-btn" data-target="showtimes">Jadwal <span>›</span></button>
+        <button class="nav-btn" data-target="notifications">Notifikasi <span>›</span></button>
+        <button class="nav-btn" data-target="users">User <span>›</span></button>
+        <button class="nav-btn" data-target="transactions">Transaksi <span>›</span></button>
+        <div style="height:12px"></div>
+        <button class="nav-btn btn-danger" id="logout-admin">Logout Admin <span>⎋</span></button>
+      </aside>
+
+      <main class="main">
+        <section class="stats">
+          <div class="stat"><div class="label">Film</div><div class="value" id="count-films">0</div></div>
+          <div class="stat"><div class="label">Bioskop</div><div class="value" id="count-cinemas">0</div></div>
+          <div class="stat"><div class="label">Jadwal</div><div class="value" id="count-showtimes">0</div></div>
+          <div class="stat"><div class="label">User</div><div class="value" id="count-users">0</div></div>
+        </section>
+
+        <section class="panel section active" id="dashboard">
+          <div class="panel-head">
+            <div>
+              <h2>Dashboard</h2>
+              <p>Status data real-time dari database.</p>
+            </div>
+            <div class="actions">
+              <button class="btn btn-ghost" id="refresh-all" type="button">Refresh Semua</button>
+            </div>
+          </div>
+          <div class="empty" id="dashboard-empty">Memuat data dashboard...</div>
+        </section>
+
+        <section class="panel section" id="films">
+          <div class="panel-head">
+            <div>
+              <h2>Kelola Film</h2>
+              <p>Tambah film baru, poster, genre, dan status tayang.</p>
+            </div>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-tab="film-form" type="button">Tambah / Edit</button>
+            <button class="tab" data-tab="film-list" type="button">Daftar Film</button>
+          </div>
+          <div class="section active" id="film-form">
+            <form id="form-film" class="form-grid">
+              <div class="field full"><label>Judul</label><input name="title" placeholder="Contoh: Interstellar" required></div>
+              <div class="field"><label>Durasi</label><input name="duration" placeholder="2j 49m"></div>
+              <div class="field"><label>Tahun</label><input name="year" type="number" placeholder="2025"></div>
+              <div class="field"><label>Rating</label><input name="rating" placeholder="8.2"></div>
+              <div class="field"><label>Poster URL</label><input name="poster" placeholder="/img/poster.jpg"></div>
+              <div class="field full"><label>Sinopsis</label><textarea name="synopsis" placeholder="Tulis sinopsis film"></textarea></div>
+              <div class="field"><label>Status</label>
+                <select name="status">
+                  <option value="now_playing">Now Playing</option>
+                  <option value="coming_soon">Coming Soon</option>
+                </select>
+              </div>
+              <div class="field" style="align-self:end;">
+                <button class="btn btn-primary" type="submit">Simpan Film</button>
+              </div>
+            </form>
+          </div>
+          <div class="section" id="film-list">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Judul</th><th>Genre</th><th>Status</th><th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="table-films"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel section" id="cinemas">
+          <div class="panel-head">
+            <div>
+              <h2>Kelola Bioskop</h2>
+              <p>Tambah lokasi bioskop dan kota.</p>
+            </div>
+          </div>
+          <form id="form-cinema" class="form-grid">
+            <div class="field"><label>Nama Bioskop</label><input name="name" placeholder="CGV Grand Indonesia" required></div>
+            <div class="field"><label>Kota</label><input name="city" placeholder="Jakarta" required></div>
+            <div class="field full"><label>Lokasi</label><input name="location" placeholder="Lokasi lengkap bioskop"></div>
+            <div class="field" style="align-self:end;"><button class="btn btn-primary" type="submit">Simpan Bioskop</button></div>
+          </form>
+          <div style="height:16px"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Nama</th><th>Kota</th><th>Lokasi</th><th>Aksi</th></tr></thead>
+              <tbody id="table-cinemas"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel section" id="showtimes">
+          <div class="panel-head">
+            <div>
+              <h2>Kelola Jadwal</h2>
+              <p>Hubungkan film, bioskop, studio, tanggal, jam, dan harga.</p>
+            </div>
+          </div>
+          <form id="form-showtime" class="form-grid">
+            <div class="field"><label>Film</label><select name="movie_id" id="movie-select" required></select></div>
+            <div class="field"><label>Bioskop</label><select name="cinema_id" id="cinema-select" required></select></div>
+            <div class="field"><label>Tanggal</label><input name="show_date" type="date" required></div>
+            <div class="field"><label>Jam</label><input name="show_time" type="time" required></div>
+            <div class="field"><label>Studio ID</label><input name="studio_id" placeholder="123"></div>
+            <div class="field"><label>Harga</label><input name="price" type="number" placeholder="50000"></div>
+            <div class="field" style="align-self:end;"><button class="btn btn-primary" type="submit">Simpan Jadwal</button></div>
+          </form>
+          <div style="height:16px"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Film</th><th>Bioskop</th><th>Tanggal</th><th>Jam</th><th>Studio</th><th>Aksi</th></tr></thead>
+              <tbody id="table-showtimes"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel section" id="notifications">
+          <div class="panel-head">
+            <div>
+              <h2>Kirim Notifikasi</h2>
+              <p>Kirim notifikasi ke semua user dengan konten yang dapat ditampilkan segera.</p>
+            </div>
+          </div>
+          <form id="form-notification" class="form-grid">
+            <div class="field full"><label>Judul</label><input name="title" placeholder="Film baru tayang!" required></div>
+            <div class="field full"><label>Pesan</label><textarea name="message" placeholder="Tulis pesan notifikasi" required></textarea></div>
+            <div class="field"><label>Gambar / Emoji</label><input name="image" placeholder="🎬"></div>
+            <div class="field" style="align-self:end;"><button class="btn btn-primary" type="submit">Kirim Notifikasi</button></div>
+          </form>
+          <div style="height:16px"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Judul</th><th>Pesan</th><th>Created At</th><th>Aksi</th></tr></thead>
+              <tbody id="table-notifications"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel section" id="users">
+          <div class="panel-head">
+            <div>
+              <h2>Daftar User</h2>
+              <p>Memantau akun user dan role mereka.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Nama</th><th>Email</th><th>Role</th></tr></thead>
+              <tbody id="table-users"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel section" id="transactions">
+          <div class="panel-head">
+            <div>
+              <h2>Transaksi</h2>
+              <p>Riwayat transaksi dari tiket dan pembayaran.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>User</th><th>Total</th><th>Status</th><th>Tanggal</th></tr></thead>
+              <tbody id="table-transactions"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
+
+2. index.html
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BE TIX - Beli Tiket Bioskop Online</title>
+  <link rel="icon" type="image/png" href="project/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    (function () {
+      try {
+        var pathname = (window.location && window.location.pathname) ? window.location.pathname : '';
+        var isAuthPage = pathname === '/login.html' || pathname.endsWith('/login.html') || pathname === '/register.html' || pathname.endsWith('/register.html');
+        var userRaw = null;
+        try { userRaw = localStorage.getItem('user_session'); } catch (e) { userRaw = null; }
+        if (!userRaw && !isAuthPage) window.location.assign('/login.html');
+      } catch (err) { }
+    })();
+  </script>
+
+  <style>
+    .success-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.72);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .success-modal.is-open { display: flex; }
+    .success-modal-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--surface, #16163a);
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+      text-align: center;
+    }
+    .success-modal-icon { font-size: 44px; margin-bottom: 12px; }
+    .success-modal-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; color: var(--text,#f0f0ff); }
+    .success-modal-text { font-size: 13px; line-height: 1.7; color: var(--text-muted,#8888bb); margin-bottom: 18px; }
+    .success-modal-actions { display: grid; gap: 10px; }
+    .success-modal-close {
+      background: transparent;
+      border: 1px solid var(--border,rgba(255,255,255,0.08));
+      color: var(--text,#f0f0ff);
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    /* ✅ FIX: Film type filter chips */
+    #film-type-filters { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <header class="header">
+      <div class="logo">BE<span>TIX</span></div>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Cari film, bioskop..." />
+      </div>
+      <div class="header-actions">
+        <button class="notif-btn" onclick="navigateTo('notif')" title="Notifikasi">
+          🔔
+          <span class="badge" id="notif-badge" style="display:none;">0</span>
+        </button>
+        <!-- ✅ Profile icon navigates to profil page -->
+        <button class="profile-btn" onclick="navigateTo('profil')">?</button>
+      </div>
+    </header>
+
+    <main class="content" id="main-content">
+
+      <!-- BERANDA -->
+      <div class="page active" id="page-beranda">
+        <!-- ✅ FIX: Hero banner managed entirely by JS (no static onclick) -->
+        <div class="hero-banner" style="cursor:default;">
+          <div style="height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a0a2e,#2d1b69);">
+            <div style="text-align:center;color:rgba(255,255,255,0.4);font-size:13px;">Memuat film...</div>
+          </div>
+        </div>
+
+        <div class="ai-bubble" id="ai-recommendation">
+          <div class="ai-label">✨ Rekomendasi</div>
+          <div class="ai-text" id="ai-text">Memuat rekomendasi...</div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <h3 class="section-title">Sedang Tayang</h3>
+            <!-- ✅ FIX: Filter to now_playing only -->
+            <button class="see-all" onclick="BE_TIX.viewAllFilms('now_playing')">Lihat Semua</button>
+          </div>
+          <div class="movies-grid" id="now-playing"></div>
+        </div>
+
+        <div class="tix-vip-banner">
+          <div>
+            <div class="vip-title">⭐ TIX VIP Program</div>
+            <div class="vip-sub">Dapatkan poin &amp; cashback eksklusif</div>
+          </div>
+          <div class="vip-btn">Gabung</div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <h3 class="section-title">Akan Datang</h3>
+            <!-- ✅ FIX: Filter to coming_soon only -->
+            <button class="see-all" onclick="BE_TIX.viewAllFilms('coming_soon')">Lihat Semua</button>
+          </div>
+          <div class="movies-grid" id="coming-soon"></div>
+        </div>
+      </div>
+
+      <!-- FILM PAGE -->
+      <div class="page" id="page-film">
+        <div class="section">
+          <!-- ✅ FIX: Film type filter (Semua / Sedang Tayang / Akan Datang) -->
+          <div class="filters" id="film-type-filters">
+            <div class="filter-chip active" id="chip-semua" onclick="BE_TIX.viewAllFilms('semua')">Semua</div>
+            <div class="filter-chip" id="chip-now-playing" onclick="BE_TIX.viewAllFilms('now_playing')">🎬 Sedang Tayang</div>
+            <div class="filter-chip" id="chip-coming-soon" onclick="BE_TIX.viewAllFilms('coming_soon')">⏳ Akan Datang</div>
+          </div>
+          <!-- ✅ FIX: Genre chips rendered dynamically by render.js -->
+          <div class="filters" id="genre-filters" style="margin-top:4px;"></div>
+          <div class="movies-grid mt-12" id="all-movies"></div>
+        </div>
+      </div>
+
+      <!-- BIOSKOP -->
+      <div class="page" id="page-bioskop">
+        <div class="section">
+          <div class="form-group">
+            <label class="form-label">Pilih Kota / Bioskop</label>
+            <select class="form-select" id="kota-select">
+              <option value="">Belum ada bioskop tersedia</option>
+            </select>
+          </div>
+          <div class="bioskop-list" id="bioskop-list"></div>
+        </div>
+      </div>
+
+      <!-- E-TICKET -->
+      <div class="page" id="page-etiket">
+        <div class="section">
+          <div class="filters">
+            <div class="filter-chip active" onclick="navigateTo('etiket')">Tiket Aktif</div>
+            <div class="filter-chip" onclick="navigateTo('riwayat')">Riwayat</div>
+          </div>
+          <div class="mt-16" id="etiket-list"></div>
+        </div>
+      </div>
+
+      <!-- PROMO -->
+      <div class="page" id="page-promo">
+        <div class="section">
+          <h3 class="section-title mb-14">Promo Spesial</h3>
+          <div class="promo-scroll" id="promo-list"></div>
+          <div class="divider"></div>
+          <h3 class="section-title mb-14">Cashback &amp; Voucher</h3>
+          <div id="voucher-list"></div>
+        </div>
+      </div>
+
+      <!-- PROFIL -->
+      <div class="page" id="page-profil">
+        <div class="section">
+          <div class="profile-card">
+            <div class="avatar-big">?</div>
+            <div class="profile-name">Memuat nama...</div>
+            <div class="profile-email">Memuat email...</div>
+            <div class="profile-stats">
+              <div class="stat-item"><div class="stat-val gold">0</div><div class="stat-label">Poin</div></div>
+              <div class="stat-divider"></div>
+              <div class="stat-item"><div class="stat-val">0</div><div class="stat-label">Tiket</div></div>
+              <div class="stat-divider"></div>
+              <div class="stat-item"><div class="stat-val red">Basic</div><div class="stat-label">Member</div></div>
+            </div>
+          </div>
+          <div class="profile-menu">
+            <div class="profile-item" onclick="navigateTo('bayar')">
+              <span class="pi-icon">💳</span>Metode Pembayaran<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('pengaturan')">
+              <span class="pi-icon">⚙️</span>Pengaturan Akun<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('faq')">
+              <span class="pi-icon">📱</span>Bantuan &amp; FAQ<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item" onclick="navigateTo('terms')">
+              <span class="pi-icon">📜</span>Syarat &amp; Ketentuan<span class="pi-arrow">›</span>
+            </div>
+            <div class="profile-item danger" onclick="logout()">
+              <span class="pi-icon">🚪</span>Logout<span class="pi-arrow">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFIKASI -->
+      <div class="page" id="page-notif">
+        <div class="section">
+          <h3 class="section-title mb-14">Notifikasi</h3>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+
+      <!-- FILM DETAIL -->
+      <div class="page" id="page-film-detail">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Detail Film</span>
+        </div>
+        <div class="section">
+          <div class="film-detail-top">
+            <div class="film-detail-poster" id="detail-poster">🎬</div>
+            <div class="film-detail-info">
+              <h2 class="film-detail-title" id="detail-title">Memuat judul...</h2>
+              <div class="tag-row" id="detail-tags"></div>
+              <div class="film-detail-meta" id="detail-meta"></div>
+              <div class="film-detail-rating" id="detail-rating"></div>
+              <button class="cta-btn mt-12" onclick="navigateTo('pesan')">🎟️ Beli Tiket</button>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="synopsis-section">
+            <div class="synopsis-label">Sinopsis</div>
+            <div class="synopsis-text" id="synopsis-text">Memuat sinopsis...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESAN TIKET -->
+      <div class="page" id="page-pesan">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pilih Jadwal</span>
+        </div>
+        <div class="section">
+          <div class="booking-form">
+            <div class="form-group">
+              <label class="form-label">Pilih Bioskop</label>
+              <select class="form-select" id="booking-cinema">
+                <option value="">Belum ada bioskop tersedia</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pilih Tanggal</label>
+              <div class="date-picker" id="date-picker"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pilih Jam Tayang</label>
+              <div id="showtime-list"></div>
+            </div>
+          </div>
+          <button class="cta-btn mt-16" onclick="navigateTo('kursi')">Pilih Kursi →</button>
+        </div>
+      </div>
+
+      <!-- KURSI -->
+      <div class="page" id="page-kursi">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pilih Kursi</span>
+        </div>
+        <div class="section">
+          <div class="booking-info-bar">Pilih film, jadwal, dan bioskop terlebih dahulu</div>
+          <div class="screen-label">LAYAR</div>
+          <div class="seat-grid" id="seat-grid"></div>
+          <div class="seat-legend">
+            <div class="legend-item"><div class="legend-dot available"></div>Tersedia</div>
+            <div class="legend-item"><div class="legend-dot selected"></div>Dipilih</div>
+            <div class="legend-item"><div class="legend-dot taken"></div>Terisi</div>
+            <div class="legend-item"><div class="legend-dot vip"></div>VIP</div>
+          </div>
+          <div class="divider"></div>
+          <div class="seat-summary">
+            <span>Kursi: <strong id="selected-count">0</strong></span>
+            <span>Total: <strong class="gold-text" id="total-price">Rp 0</strong></span>
+          </div>
+          <button class="cta-btn mt-16" onclick="navigateTo('bayar')">Lanjut Pembayaran →</button>
+        </div>
+      </div>
+
+      <!-- BAYAR -->
+      <div class="page" id="page-bayar">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pembayaran</span>
+        </div>
+        <div class="section">
+          <div class="booking-form mb-16">
+            <div class="order-summary-title">Ringkasan Pesanan</div>
+            <div class="ticket-row"><span class="ticket-key">Film</span><span class="ticket-val" id="pay-film">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Bioskop</span><span class="ticket-val" id="pay-cinema">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Kursi</span><span class="ticket-val" id="pay-seats">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Harga Tiket</span><span class="ticket-val" id="pay-price">-</span></div>
+            <div class="ticket-row"><span class="ticket-key">Biaya Layanan</span><span class="ticket-val">Rp 3.000</span></div>
+            <div class="ticket-row no-border"><span class="ticket-key bold">Total</span><span class="ticket-val gold-text large" id="pay-total">-</span></div>
+          </div>
+          <div class="pay-section-title">Pilih Metode Pembayaran</div>
+          <div class="pay-methods" id="pay-methods"></div>
+          <button class="cta-btn gold mt-16" onclick="processPayment()">💳 Bayar Sekarang</button>
+        </div>
+      </div>
+
+      <!-- FAQ -->
+      <div class="page" id="page-faq">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Bantuan &amp; FAQ</span>
+        </div>
+        <div class="section">
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Cara membeli tiket?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Pilih film, tentukan jadwal, pilih kursi, lalu selesaikan pembayaran.</p>
+          </div>
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Bagaimana refund tiket?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Kebijakan refund dapat disesuaikan oleh admin bioskop dan aturan transaksi yang berlaku.</p>
+          </div>
+          <div class="faq-item" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+            <h4 style="margin-bottom:8px;font-size:15px;">Apakah bisa pilih kursi?</h4>
+            <p style="color:var(--text-muted);line-height:1.7;font-size:13px;">Ya. Kursi akan tampil otomatis setelah jadwal tayang dipilih.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TERMS -->
+      <div class="page" id="page-terms">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Syarat &amp; Ketentuan</span>
+        </div>
+        <div class="section">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;line-height:1.8;color:var(--text-muted);font-size:13px;">
+            <p style="margin-bottom:12px;">Dengan menggunakan BE TIX, pengguna menyetujui syarat penggunaan, kebijakan privasi, dan ketentuan transaksi yang berlaku di platform.</p>
+            <p style="margin-bottom:12px;">Informasi film, jadwal, harga, promo, dan ketersediaan kursi dapat berubah sewaktu-waktu sesuai data yang ditambahkan oleh admin atau pihak bioskop.</p>
+            <p>BE TIX dapat menampilkan notifikasi, tiket digital, dan informasi akun berdasarkan aktivitas pengguna untuk mendukung pengalaman pemesanan yang lebih baik.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PENGATURAN -->
+      <div class="page" id="page-pengaturan">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Pengaturan Akun</span>
+        </div>
+        <div class="section">
+          <div class="profile-menu">
+            <div class="profile-item">
+              <span class="pi-icon">🌙</span>Mode Gelap<span class="pi-arrow">ON</span>
+            </div>
+            <div class="profile-item">
+              <span class="pi-icon">🔔</span>Notifikasi<span class="pi-arrow">ON</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIWAYAT -->
+      <div class="page" id="page-riwayat">
+        <div class="sub-header">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span class="sub-title">Riwayat Tiket</span>
+        </div>
+        <div class="section">
+          <div id="riwayat-list"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ✅ FIX: Bottom nav — 4 items only, profile removed (accessible via header icon) -->
+    <nav class="bottom-bar">
+      <div class="bottom-item active" id="btn-beranda" onclick="switchNav('beranda', this, true)">
+        <span class="bottom-icon">🏠</span>
+        <span class="bottom-label">Beranda</span>
+      </div>
+      <div class="bottom-item" id="btn-film" onclick="switchNav('film', this, true)">
+        <span class="bottom-icon">🎬</span>
+        <span class="bottom-label">Film</span>
+      </div>
+      <div class="bottom-item" id="btn-bioskop" onclick="switchNav('bioskop', this, true)">
+        <span class="bottom-icon">📍</span>
+        <span class="bottom-label">Bioskop</span>
+      </div>
+      <div class="bottom-item" id="btn-etiket" onclick="switchNav('etiket', this, true)">
+        <span class="bottom-icon">🎟️</span>
+        <span class="bottom-label">E-Ticket</span>
+      </div>
+    </nav>
+  </div>
+
+  <!-- SUCCESS MODAL -->
+  <div id="success-modal" class="success-modal" aria-hidden="true">
+    <div class="success-modal-card">
+      <div class="success-modal-icon">✅</div>
+      <div class="success-modal-title">Pembayaran Berhasil</div>
+      <div class="success-modal-text">Tiket berhasil dibuat dan masuk ke E-Ticket. Silakan buka halaman tiket untuk melihat detail transaksi.</div>
+      <div class="success-modal-actions">
+        <button class="cta-btn" onclick="this.closest('.success-modal').classList.remove('is-open'); navigateTo('etiket');">Lihat Tiket</button>
+        <button class="success-modal-close" onclick="this.closest('.success-modal').classList.remove('is-open');">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/data.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/render.js"></script>
+  <script src="/js/navigation.js"></script>
+  <script src="/js/app.js"></script>
+
+  <script>
+    function safeParseUser(raw) {
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    function getInitials(name, email) {
+      var source = '';
+      if (typeof name === 'string' && name.trim()) {
+        source = name.trim();
+      } else if (typeof email === 'string' && email.trim()) {
+        source = email.split('@')[0].replaceAll('.', ' ').replaceAll('_', ' ').replaceAll('-', ' ').trim();
+      }
+      if (!source) return '?';
+      var parts = source.split(' ').filter(Boolean);
+      var first = parts[0] ? parts[0].charAt(0) : '';
+      var second = parts.length > 1 ? parts[1].charAt(0) : (source.length > 1 ? source.charAt(1) : '');
+      return (first + second).toUpperCase() || '?';
+    }
+
+    function syncUserProfile() {
+      var user = null;
+      try { user = safeParseUser(localStorage.getItem('user_session')); } catch { }
+      var name = 'Pengguna';
+      var email = '';
+      if (user && typeof user === 'object') {
+        name = user.name || user.nama || user.username || name;
+        email = user.email || email;
+      }
+      var profileName = document.querySelector('#page-profil .profile-name');
+      var profileEmail = document.querySelector('#page-profil .profile-email');
+      var avatarBig = document.querySelector('#page-profil .avatar-big');
+      var headerProfileBtn = document.querySelector('.header-actions .profile-btn');
+      if (profileName) profileName.textContent = name;
+      if (profileEmail) profileEmail.textContent = email;
+      var initials = getInitials(name, email);
+      if (avatarBig) avatarBig.textContent = initials;
+      if (headerProfileBtn) headerProfileBtn.textContent = initials;
+
+      // Update profile stats from stored tickets
+      try {
+        var tickets = JSON.parse(localStorage.getItem('betix_active_tickets') || '[]');
+        var statTicket = document.querySelector('#page-profil .stat-val:not(.gold):not(.red)');
+        if (statTicket) statTicket.textContent = tickets.length;
+        if (user && user.points) {
+          var statPoin = document.querySelector('#page-profil .stat-val.gold');
+          if (statPoin) statPoin.textContent = user.points;
+        }
+      } catch { }
+    }
+
+    function logout() {
+      try { localStorage.removeItem('user_session'); } catch { }
+      window.location.assign('/login.html');
+    }
+
+    // ✅ Update payment summary when navigating to bayar page
+    function updatePaymentSummary() {
+      try {
+        var state = window.BE_TIX && window.BE_TIX.state;
+        if (!state) return;
+        var filmEl = document.getElementById('pay-film');
+        var cinemaEl = document.getElementById('pay-cinema');
+        var seatsEl = document.getElementById('pay-seats');
+        var priceEl = document.getElementById('pay-price');
+        var totalEl = document.getElementById('pay-total');
+        if (filmEl && state.selectedMovie) filmEl.textContent = state.selectedMovie.title || '-';
+        if (cinemaEl && state.selectedCinema) cinemaEl.textContent = state.selectedCinema.name || '-';
+        if (seatsEl) seatsEl.textContent = (state.selectedSeats || []).join(', ') || '-';
+        var showtime = state.selectedShowtime;
+        var price = showtime ? Number(showtime.price || 50000) : 50000;
+        var count = (state.selectedSeats || []).length;
+        if (priceEl) priceEl.textContent = 'Rp ' + price.toLocaleString('id-ID') + ' x ' + count;
+        if (totalEl) totalEl.textContent = 'Rp ' + ((price * count) + 3000).toLocaleString('id-ID');
+      } catch { }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      syncUserProfile();
+    });
+
+    // Patch navigateTo to update payment summary when going to bayar
+    var _origNavigateTo = window.navigateTo;
+    window.navigateTo = function (page, opts) {
+      if (page === 'bayar') setTimeout(updatePaymentSummary, 50);
+      if (_origNavigateTo) _origNavigateTo(page, opts);
+    };
+
+    window.syncUserProfile = syncUserProfile;
+    window.logout = logout;
+  </script>
+</body>
+</html>
+
+3. login.html
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BE TIX - Masuk</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: radial-gradient(circle at top right, var(--navy-light), var(--navy));
+    }
+    .auth-card {
+      background: var(--surface);
+      width: 100%;
+      max-width: 400px;
+      padding: 40px 30px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .auth-logo {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text);
+      text-align: center;
+      margin-bottom: 30px;
+      letter-spacing: -1px;
+    }
+    .auth-logo span { color: var(--red); }
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--red);
+    }
+    .btn-auth {
+      width: 100%;
+      background: var(--red);
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.3s;
+    }
+    .btn-auth:hover { background: var(--red-dark); }
+    .auth-footer {
+      text-align: center;
+      margin-top: 25px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .auth-footer a {
+      color: var(--red);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .error-msg {
+      background: rgba(230, 57, 70, 0.1);
+      color: var(--red);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-logo">BE<span>TIX</span></div>
+    
+    <div id="error-box" class="error-msg">Email atau password salah.</div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" class="form-input" placeholder="Masukkan email Anda" required>
+      </div>
+      <div class="form-group">
+        <label>Kata Sandi</label>
+        <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn-auth">Masuk Sekarang</button>
+    </form>
+
+    <div class="auth-footer">
+      Belum punya akun? <a href="/register.html">Daftar Gratis</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SESSION_KEY = 'user_session';
+  const loginForm = document.getElementById('login-form');
+  const errorBox = document.getElementById('error-box');
+
+  function safeParse(raw) {
+    try {
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+      ...user,
+      role: String(user.role || 'user').toLowerCase(),
+      name: user.name || user.nama || user.username || '',
+      email: user.email || ''
+    };
+  }
+
+  function redirectByRole(user) {
+    const role = String(user?.role || 'user').toLowerCase();
+    if (role === 'admin') {
+      window.location.assign('/admin.html');
+      return;
+    }
+    window.location.assign('/index.html');
+  }
+
+  const existing = normalizeUser(safeParse(localStorage.getItem(SESSION_KEY)));
+  if (existing) {
+    redirectByRole(existing);
+  }
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    try {
+      const response = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        errorBox.textContent = data.message || 'Login gagal. Silakan coba lagi.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const user = normalizeUser(data.user);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      redirectByRole(user);
+    } catch (err) {
+      errorBox.textContent = 'Terjadi kesalahan koneksi ke server.';
+      errorBox.style.display = 'block';
+    }
+  });
+</script>
+
+</body>
+</html>
+
+4. register.html
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BE TIX - Daftar Akun</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: radial-gradient(circle at top right, var(--navy-light), var(--navy));
+    }
+    .auth-card {
+      background: var(--surface);
+      width: 100%;
+      max-width: 450px;
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .auth-logo {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--text);
+      text-align: center;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    .auth-logo span { color: var(--red); }
+    .role-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 22px;
+      background: var(--navy-mid);
+      padding: 5px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .role-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .role-btn.active {
+      background: var(--surface2);
+      color: var(--red);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .full-width { grid-column: span 2; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+    .form-input:focus { border-color: var(--red); }
+    #admin-pass-field {
+      background: rgba(255, 183, 3, 0.05);
+      border: 1px dashed var(--gold);
+      padding: 15px;
+      border-radius: var(--radius);
+      margin-bottom: 15px;
+      display: none;
+    }
+    .btn-auth {
+      width: 100%;
+      background: var(--red);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .auth-footer a {
+      color: var(--red);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .error-msg {
+      background: rgba(230, 57, 70, 0.1);
+      color: var(--red);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .success-msg {
+      background: rgba(0, 180, 100, 0.12);
+      color: #7bf2b5;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    @media (max-width: 560px) {
+      .auth-card { padding: 26px 20px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .full-width { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-logo">BE<span>TIX</span></div>
+
+    <div id="error-box" class="error-msg"></div>
+    <div id="success-box" class="success-msg"></div>
+
+    <div class="role-selector">
+      <button class="role-btn active" type="button" onclick="setRole('user', this)">User Biasa</button>
+      <button class="role-btn" type="button" onclick="setRole('admin', this)">Admin</button>
+    </div>
+
+    <form id="register-form">
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Nama Lengkap</label>
+          <input type="text" id="name" name="name" class="form-input" placeholder="Contoh: Budi Santoso" required>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Email</label>
+          <input type="email" id="email" class="form-input" placeholder="email@domain.com" required>
+        </div>
+
+        <div class="form-group">
+          <label>Kata Sandi</label>
+          <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+        </div>
+
+        <div class="form-group">
+          <label>Konfirmasi Sandi</label>
+          <input type="password" id="confirm_password" class="form-input" placeholder="••••••••" required>
+        </div>
+      </div>
+
+      <div id="admin-pass-field">
+        <label style="color: var(--gold)">Admin Passcode</label>
+        <input type="password" id="admin_passcode" class="form-input" style="border-color: var(--gold-dark)" placeholder="Masukkan kode otorisasi">
+        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Hanya untuk staff berwenang.</small>
+      </div>
+
+      <input type="hidden" id="role" value="user">
+      <button type="submit" class="btn-auth">Buat Akun</button>
+    </form>
+
+    <div class="auth-footer">
+      Sudah punya akun? <a href="/login.html">Masuk di sini</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SESSION_KEY = 'user_session';
+  const regForm = document.getElementById('register-form');
+  const errorBox = document.getElementById('error-box');
+  const successBox = document.getElementById('success-box');
+
+  function clearMessages() {
+    errorBox.style.display = 'none';
+    successBox.style.display = 'none';
+    errorBox.textContent = '';
+    successBox.textContent = '';
+  }
+
+  function setRole(role, btn) {
+    document.getElementById('role').value = role;
+
+    document.querySelectorAll('.role-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const adminField = document.getElementById('admin-pass-field');
+    const adminInput = document.getElementById('admin_passcode');
+
+    if (role === 'admin') {
+      adminField.style.display = 'block';
+      adminInput.required = true;
+    } else {
+      adminField.style.display = 'none';
+      adminInput.required = false;
+      adminInput.value = '';
+    }
+  }
+
+  function normalizeUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+      ...user,
+      role: String(user.role || 'user').toLowerCase(),
+      name: user.name || user.nama || user.username || '',
+      email: user.email || ''
+    };
+  }
+
+  function redirectByRole(user) {
+    const role = String(user?.role || 'user').toLowerCase();
+    if (role === 'admin') {
+      window.location.assign('/admin.html');
+      return;
+    }
+    window.location.assign('/index.html');
+  }
+
+  const existing = normalizeUser((() => {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+  })());
+  if (existing) redirectByRole(existing);
+
+  regForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearMessages();
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const role = document.getElementById('role').value;
+    const adminPasscode = document.getElementById('admin_passcode').value.trim();
+
+    if (password !== confirm) {
+      errorBox.textContent = 'Konfirmasi password tidak cocok.';
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    const payload = { name, email, password, role };
+    if (role === 'admin') payload.adminPasscode = adminPasscode;
+
+    try {
+      const response = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        errorBox.textContent = data.message || 'Registrasi gagal.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const user = normalizeUser(data.user || { name, email, role });
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      successBox.textContent = 'Registrasi berhasil. Mengalihkan halaman...';
+      successBox.style.display = 'block';
+
+      setTimeout(() => redirectByRole(user), 800);
+    } catch (err) {
+      errorBox.textContent = 'Terjadi kesalahan sistem.';
+      errorBox.style.display = 'block';
+    }
+  });
+</script>
+
+</body>
+</html>
+

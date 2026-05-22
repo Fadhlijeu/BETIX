@@ -1,0 +1,2931 @@
+Path: D:\DOWNLOAD\betix-main\public\js
+
+1. admin.js
+
+// ============================================
+//  BE TIX — Admin JS (Fixed & Enhanced)
+//  Fixes:
+//  1. Edit functionality (film, bioskop, jadwal)
+//  2. Genre as multi-select list
+//  3. Studio dropdown loaded from API
+//  4. Status display fix (not "-")
+//  5. User management (ban, pw reset, delete)
+//  6. Bulk schedule upload
+// ============================================
+
+(function () {
+  const ADMIN_SESSION_KEY = 'user_session';
+  const toastState = { timer: null };
+  let editingId = { film: null, cinema: null, showtime: null, notification: null };
+
+  const GENRES = ['Aksi','Drama','Komedi','Horor','Thriller','Animasi','Sci-Fi','Romansa','Petualangan','Dokumenter','Fantasi','Biografi'];
+
+  function safeParse(raw) {
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  function getSessionUser() { return safeParse(localStorage.getItem(ADMIN_SESSION_KEY)); }
+
+  function requireAdmin() {
+    const user = getSessionUser();
+    if (!user) { window.location.assign('/login.html'); return null; }
+    if (String(user.role || '').toLowerCase() !== 'admin') { window.location.assign('/index.html'); return null; }
+    return user;
+  }
+
+  function el(id) { return document.getElementById(id); }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
+  }
+
+  function showToast(message, type = 'info') {
+    const toast = el('toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.style.borderColor = type === 'error' ? 'rgba(230,57,70,0.4)' : 'rgba(255,183,3,0.3)';
+    toast.classList.add('show');
+    clearTimeout(toastState.timer);
+    toastState.timer = setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
+  async function fetchJson(url, options) {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) throw new Error(data.message || `Request gagal (${res.status})`);
+    return data;
+  }
+
+  function setActiveSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    const target = el(id); if (target) target.classList.add('active');
+    document.querySelectorAll('.nav-btn[data-target]').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`.nav-btn[data-target="${id}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+  }
+
+  function renderEmptyRow(tbody, colspan, message = 'Data belum tersedia.') {
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty">${escapeHtml(message)}</div></td></tr>`;
+  }
+
+  function getFormData(form) { return Object.fromEntries(new FormData(form).entries()); }
+  function resetForm(form) { if (form) form.reset(); }
+
+  // ============================================================
+  // GENRE MULTI-SELECT
+  // ============================================================
+  function renderGenreMultiSelect(containerId, selectedGenres = []) {
+    const container = el(containerId);
+    if (!container) return;
+    const sel = Array.isArray(selectedGenres) ? selectedGenres : String(selectedGenres).split(',').map(g => g.trim()).filter(Boolean);
+    container.innerHTML = GENRES.map(g => `
+      <label style="
+        display:inline-flex;align-items:center;gap:5px;
+        padding:5px 11px;border-radius:999px;cursor:pointer;
+        border:1px solid ${sel.includes(g) ? 'var(--red)' : 'var(--line)'};
+        background:${sel.includes(g) ? 'rgba(230,57,70,0.14)' : 'rgba(255,255,255,0.03)'};
+        font-size:12px;font-weight:600;transition:all 0.15s;
+        color:${sel.includes(g) ? '#fff' : 'var(--muted)'};
+      ">
+        <input type="checkbox" name="genre_${g}" value="${g}" ${sel.includes(g) ? 'checked' : ''}
+               style="display:none;" onchange="BE_TIX_ADMIN.toggleGenreChip(this)">
+        ${escapeHtml(g)}
+      </label>`).join('');
+  }
+
+  function getSelectedGenres(containerId) {
+    const container = el(containerId);
+    if (!container) return [];
+    return [...container.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+  }
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  async function loadData() {
+    try {
+      const [films, cinemas, showtimes, users, transactions, notifications, studios] = await Promise.all([
+        fetch('/api/movies').then(r => r.json()).catch(() => []),
+        fetch('/api/cinemas').then(r => r.json()).catch(() => []),
+        fetch('/api/schedules').then(r => r.json()).catch(() => []),
+        fetch('/api/users').then(r => r.json()).catch(() => []),
+        fetch('/api/transactions').then(r => r.json()).catch(() => []),
+        fetch('/api/notifications').then(r => r.json()).catch(() => []),
+        fetch('/api/studios').then(r => r.json()).catch(() => [])
+      ]);
+
+      renderDashboard(films, cinemas, showtimes, users, transactions, notifications);
+      renderFilmTable(films);
+      renderCinemaTable(cinemas);
+      renderShowtimeTable(showtimes, films, cinemas, studios);
+      renderUsersTable(users);
+      renderTransactionsTable(transactions);
+      renderNotificationsTable(notifications);
+      renderStudiosTable(studios, cinemas);
+      populateLinkedSelects(films, cinemas, studios);
+
+      window._adminData = { films, cinemas, showtimes, users, transactions, notifications, studios };
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ============================================================
+  // DASHBOARD
+  // ============================================================
+  function renderDashboard(films, cinemas, showtimes, users, transactions, notifications) {
+    ['count-films','count-cinemas','count-showtimes','count-users'].forEach((id, i) => {
+      const counts = [films.length, cinemas.length, showtimes.length, users.length];
+      const e = el(id); if (e) e.textContent = counts[i];
+    });
+    const empty = el('dashboard-empty');
+    if (empty) {
+      const paid = transactions.filter(t => t.payment_status === 'paid').length;
+      const revenue = transactions.filter(t => t.payment_status === 'paid').reduce((s, t) => s + (t.total_price || 0), 0);
+      empty.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:left;">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Film Tayang</div>
+            <div style="font-size:20px;font-weight:800;">${films.filter(f => f.is_now_playing).length}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Film Segera</div>
+            <div style="font-size:20px;font-weight:800;">${films.filter(f => f.is_coming_soon).length}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Transaksi Sukses</div>
+            <div style="font-size:20px;font-weight:800;color:#7bf2b5;">${paid}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Total Revenue</div>
+            <div style="font-size:16px;font-weight:800;color:var(--gold);">Rp ${revenue.toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:center;">
+          Studio: ${(window._adminData?.studios||[]).length} • Notifikasi: ${notifications.length}
+        </div>`;
+    }
+  }
+
+  // ============================================================
+  // FILM TABLE
+  // ============================================================
+  function getStatusBadge(film) {
+    if (film.is_now_playing == 1 || film.is_now_playing === true) {
+      return `<span class="badge admin">Now Playing</span>`;
+    }
+    if (film.is_coming_soon == 1 || film.is_coming_soon === true) {
+      return `<span class="badge user">Coming Soon</span>`;
+    }
+    return `<span class="badge" style="background:rgba(255,255,255,0.06);color:var(--muted)">Draft</span>`;
+  }
+
+  function renderFilmTable(films) {
+    const tbody = el('table-films');
+    if (!tbody) return;
+    if (!films.length) return renderEmptyRow(tbody, 6, 'Belum ada film.');
+    tbody.innerHTML = films.map(film => `
+      <tr>
+        <td>${escapeHtml(film.id ?? '-')}</td>
+        <td>
+          <div style="font-weight:700;">${escapeHtml(film.title || '-')}</div>
+          <div style="font-size:11px;color:var(--muted);">${escapeHtml(film.genre || '-')}</div>
+        </td>
+        <td>${escapeHtml(film.duration || '-')}</td>
+        <td>${escapeHtml(film.year || '-')}</td>
+        <td>${getStatusBadge(film)}</td>
+        <td>
+          <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" data-action="edit-film" data-id="${film.id}">✏️ Edit</button>
+          <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" data-action="delete-film" data-id="${film.id}">🗑 Hapus</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // ============================================================
+  // CINEMA TABLE
+  // ============================================================
+  function renderCinemaTable(cinemas) {
+    const tbody = el('table-cinemas');
+    if (!tbody) return;
+    if (!cinemas.length) return renderEmptyRow(tbody, 5, 'Belum ada bioskop.');
+    tbody.innerHTML = cinemas.map(c => `
+      <tr>
+        <td>${escapeHtml(c.id ?? '-')}</td>
+        <td style="font-weight:700;">${escapeHtml(c.name || '-')}</td>
+        <td>${escapeHtml(c.city || '-')}</td>
+        <td>${escapeHtml(c.location || '-')}</td>
+        <td>
+          <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" data-action="edit-cinema" data-id="${c.id}">✏️ Edit</button>
+          <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" data-action="delete-cinema" data-id="${c.id}">🗑 Hapus</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // ============================================================
+  // SHOWTIME TABLE
+  // ============================================================
+  function renderShowtimeTable(showtimes, films, cinemas, studios) {
+    const tbody = el('table-showtimes');
+    if (!tbody) return;
+    if (!showtimes.length) return renderEmptyRow(tbody, 8, 'Belum ada jadwal.');
+    tbody.innerHTML = showtimes.map(s => {
+      const film = films.find(f => String(f.id) === String(s.movie_id)) || {};
+      const cinema = cinemas.find(c => String(c.id) === String(s.cinema_id)) || {};
+      const studio = studios.find(st => String(st.id) === String(s.studio_id)) || {};
+      return `
+        <tr>
+          <td>${escapeHtml(s.id ?? '-')}</td>
+          <td style="font-weight:700;">${escapeHtml(film.title || '-')}</td>
+          <td>${escapeHtml(cinema.name || '-')}</td>
+          <td>${escapeHtml(studio.name || s.studio_id || '-')}</td>
+          <td>${escapeHtml(s.show_date || '-')}</td>
+          <td>${escapeHtml(s.show_time || '-')}</td>
+          <td>Rp ${Number(s.price || 0).toLocaleString('id-ID')}</td>
+          <td>
+            <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" data-action="edit-showtime" data-id="${s.id}">✏️ Edit</button>
+            <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" data-action="delete-showtime" data-id="${s.id}">🗑 Hapus</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ============================================================
+  // STUDIOS TABLE
+  // ============================================================
+  function renderStudiosTable(studios, cinemas) {
+    const tbody = el('table-studios');
+    if (!tbody) return;
+    if (!studios.length) return renderEmptyRow(tbody, 5, 'Belum ada studio.');
+    tbody.innerHTML = studios.map(s => {
+      const cinema = cinemas.find(c => String(c.id) === String(s.cinema_id)) || {};
+      return `
+        <tr>
+          <td>${escapeHtml(s.id ?? '-')}</td>
+          <td style="font-weight:700;">${escapeHtml(s.name || '-')}</td>
+          <td>${escapeHtml(cinema.name || '-')}</td>
+          <td>${escapeHtml(s.seat_capacity || 40)}</td>
+          <td>
+            <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" data-action="delete-studio" data-id="${s.id}">🗑 Hapus</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ============================================================
+  // USERS TABLE (with management)
+  // ============================================================
+  function renderUsersTable(users) {
+    const tbody = el('table-users');
+    if (!tbody) return;
+    if (!users.length) return renderEmptyRow(tbody, 6, 'Belum ada user.');
+    tbody.innerHTML = users.map(user => `
+      <tr>
+        <td>${escapeHtml(user.id ?? '-')}</td>
+        <td style="font-weight:700;">${escapeHtml(user.name || '-')}</td>
+        <td>${escapeHtml(user.email || '-')}</td>
+        <td>
+          <span class="badge ${(user.role || 'user').toLowerCase()}">${escapeHtml(user.role || 'user')}</span>
+        </td>
+        <td>${escapeHtml(user.points || 0)} pts</td>
+        <td>
+          <button class="btn btn-ghost" style="padding:5px 9px;font-size:11px;" data-action="view-pw" data-id="${user.id}" data-pw="${escapeHtml(user.password || '')}">🔑 PW</button>
+          <button class="btn btn-ghost" style="padding:5px 9px;font-size:11px;" data-action="reset-pw" data-id="${user.id}">♻️ Reset</button>
+          <button class="btn btn-danger" style="padding:5px 9px;font-size:11px;" data-action="delete-user" data-id="${user.id}">🗑</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // ============================================================
+  // TRANSACTIONS TABLE
+  // ============================================================
+  function renderTransactionsTable(transactions) {
+    const tbody = el('table-transactions');
+    if (!tbody) return;
+    if (!transactions.length) return renderEmptyRow(tbody, 5, 'Belum ada transaksi.');
+    tbody.innerHTML = transactions.map(tx => {
+      const statusColor = tx.payment_status === 'paid' ? 'admin' : tx.payment_status === 'cancelled' ? 'danger' : 'user';
+      return `
+        <tr>
+          <td>${escapeHtml(tx.id ?? '-')}</td>
+          <td>${escapeHtml(tx.user_id || '-')}</td>
+          <td>Rp ${Number(tx.total_price || 0).toLocaleString('id-ID')}</td>
+          <td><span class="badge ${statusColor}">${escapeHtml(tx.payment_status || 'pending')}</span></td>
+          <td>${escapeHtml(tx.created_at ? new Date(tx.created_at).toLocaleDateString('id-ID') : '-')}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ============================================================
+  // NOTIFICATIONS TABLE
+  // ============================================================
+  function renderNotificationsTable(notifications) {
+    const tbody = el('table-notifications');
+    if (!tbody) return;
+    if (!notifications.length) return renderEmptyRow(tbody, 5, 'Belum ada notifikasi.');
+    tbody.innerHTML = notifications.map(n => `
+      <tr>
+        <td>${escapeHtml(n.id ?? '-')}</td>
+        <td style="font-weight:700;">${escapeHtml(n.title || '-')}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.message || '-')}</td>
+        <td>${escapeHtml(n.created_at ? new Date(n.created_at).toLocaleDateString('id-ID') : '-')}</td>
+        <td>
+          <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" data-action="delete-notification" data-id="${n.id}">🗑 Hapus</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // ============================================================
+  // POPULATE SELECTS
+  // ============================================================
+  function populateLinkedSelects(films, cinemas, studios) {
+    const movieSelect = el('movie-select');
+    const cinemaSelect = el('cinema-select');
+    const studioSelect = el('studio-select');
+    const studioCinemaSelect = el('studio-cinema-select');
+
+    if (movieSelect) {
+      movieSelect.innerHTML = films.length
+        ? films.map(f => `<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.title || '-')}</option>`).join('')
+        : `<option value="">Belum ada film</option>`;
+    }
+
+    if (cinemaSelect) {
+      cinemaSelect.innerHTML = cinemas.length
+        ? cinemas.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name || '-')}</option>`).join('')
+        : `<option value="">Belum ada bioskop</option>`;
+    }
+
+    // ✅ FIXED: Studio as dropdown, not text input
+    if (studioSelect) {
+      studioSelect.innerHTML = studios.length
+        ? `<option value="">Pilih Studio</option>` + studios.map(s => {
+            const cinema = (window._adminData?.cinemas || cinemas).find(c => String(c.id) === String(s.cinema_id)) || {};
+            return `<option value="${s.id}">${escapeHtml(s.name)} — ${escapeHtml(cinema.name || 'Bioskop ?')} (${s.seat_capacity} kursi)</option>`;
+          }).join('')
+        : `<option value="">Belum ada studio — buat studio dulu</option>`;
+    }
+
+    if (studioCinemaSelect) {
+      studioCinemaSelect.innerHTML = cinemas.length
+        ? `<option value="">Pilih Bioskop</option>` + cinemas.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
+        : `<option value="">Belum ada bioskop</option>`;
+    }
+  }
+
+  // ============================================================
+  // SUBMIT FILM
+  // ============================================================
+  async function submitFilm(form) {
+    const data = getFormData(form);
+    const genres = getSelectedGenres('genre-multiselect');
+
+    if (!data.title || !data.duration || !genres.length) {
+      showToast('Judul, durasi, dan minimal 1 genre wajib diisi.', 'error');
+      return;
+    }
+
+    const payload = {
+      title: data.title,
+      duration: data.duration,
+      genre: genres.join(', '),
+      poster: data.poster || '',
+      rating: data.rating || null,
+      year: data.year || null,
+      synopsis: data.synopsis || '',
+      is_now_playing: data.status === 'now_playing' ? 1 : 0,
+      is_coming_soon: data.status === 'coming_soon' ? 1 : 0
+    };
+
+    const isEditing = !!editingId.film;
+    const url = isEditing ? `/api/movies/${editingId.film}` : '/api/movies';
+    const method = isEditing ? 'PUT' : 'POST';
+
+    await fetchJson(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    resetForm(form);
+    editingId.film = null;
+    updateFormEditState('form-film', false, 'film');
+    renderGenreMultiSelect('genre-multiselect');
+    showToast(isEditing ? 'Film berhasil diperbarui' : 'Film berhasil disimpan');
+    await loadData();
+  }
+
+  // ============================================================
+  // SUBMIT CINEMA
+  // ============================================================
+  async function submitCinema(form) {
+    const payload = getFormData(form);
+    const isEditing = !!editingId.cinema;
+    const url = isEditing ? `/api/cinemas/${editingId.cinema}` : '/api/cinemas';
+    const method = isEditing ? 'PUT' : 'POST';
+    await fetchJson(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    resetForm(form);
+    editingId.cinema = null;
+    updateFormEditState('form-cinema', false, 'cinema');
+    showToast(isEditing ? 'Bioskop berhasil diperbarui' : 'Bioskop berhasil disimpan');
+    await loadData();
+  }
+
+  // ============================================================
+  // SUBMIT STUDIO
+  // ============================================================
+  async function submitStudio(form) {
+    const payload = getFormData(form);
+    if (!payload.cinema_id || !payload.name) {
+      showToast('Bioskop dan nama studio wajib diisi.', 'error'); return;
+    }
+    await fetchJson('/api/studios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    resetForm(form);
+    showToast('Studio berhasil dibuat');
+    await loadData();
+  }
+
+  // ============================================================
+  // SUBMIT SHOWTIME (with bulk)
+  // ============================================================
+  async function submitShowtime(form) {
+    const data = getFormData(form);
+    const movieId = data.movie_id;
+    const studioId = data.studio_id;
+    const price = data.price || 50000;
+
+    if (!movieId || !studioId) {
+      showToast('Film dan studio wajib dipilih.', 'error'); return;
+    }
+
+    // Collect all schedule rows
+    const rows = document.querySelectorAll('.schedule-row');
+    if (!rows.length) {
+      showToast('Tambahkan minimal 1 jadwal.', 'error'); return;
+    }
+
+    const schedules = [];
+    let valid = true;
+    rows.forEach(row => {
+      const date = row.querySelector('.sched-date')?.value;
+      const time = row.querySelector('.sched-time')?.value;
+      const stId = row.querySelector('.sched-studio')?.value || studioId;
+      const pr = row.querySelector('.sched-price')?.value || price;
+      if (!date || !time) { valid = false; return; }
+      schedules.push({ movie_id: movieId, studio_id: stId, show_date: date, show_time: time, price: pr });
+    });
+
+    if (!valid) { showToast('Isi tanggal dan jam untuk semua jadwal.', 'error'); return; }
+
+    const isEditing = !!editingId.showtime;
+    if (isEditing && schedules.length === 1) {
+      await fetchJson(`/api/schedules/${editingId.showtime}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(schedules[0])
+      });
+      editingId.showtime = null;
+      updateFormEditState('form-showtime', false, 'showtime');
+    } else {
+      await fetchJson('/api/schedules/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ movie_id: movieId, schedules })
+      });
+    }
+
+    resetForm(form);
+    document.querySelectorAll('.schedule-row').forEach(r => r.remove());
+    addScheduleRow(); // Add one fresh row
+    showToast(`${schedules.length} jadwal berhasil disimpan`);
+    await loadData();
+  }
+
+  // ============================================================
+  // SCHEDULE ROWS (Bulk UI)
+  // ============================================================
+  function addScheduleRow(date = '', time = '', studioId = '') {
+    const container = el('schedule-rows');
+    if (!container) return;
+    const studios = window._adminData?.studios || [];
+    const studioOptions = studios.length
+      ? studios.map(s => `<option value="${s.id}" ${String(s.id) === String(studioId) ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')
+      : '<option value="">Belum ada studio</option>';
+
+    const row = document.createElement('div');
+    row.className = 'schedule-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;';
+    row.innerHTML = `
+      <input type="date" class="sched-date field input" value="${escapeHtml(date)}" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;outline:none;font:inherit;">
+      <input type="time" class="sched-time field input" value="${escapeHtml(time)}" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;outline:none;font:inherit;">
+      <select class="sched-studio" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;outline:none;font:inherit;">
+        ${studioOptions}
+      </select>
+      <input type="number" class="sched-price" placeholder="Harga" value="50000" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;outline:none;font:inherit;">
+      <button type="button" onclick="this.closest('.schedule-row').remove()" style="background:rgba(230,57,70,0.12);border:1px solid rgba(230,57,70,0.28);color:#ffb7bf;border-radius:8px;padding:9px;cursor:pointer;font-size:14px;">✕</button>`;
+    container.appendChild(row);
+  }
+
+  // ============================================================
+  // SUBMIT NOTIFICATION
+  // ============================================================
+  async function submitNotification(form) {
+    const payload = getFormData(form);
+    await fetchJson('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    resetForm(form);
+    showToast('Notifikasi berhasil dikirim');
+    await loadData();
+  }
+
+  // ============================================================
+  // EDIT HANDLERS
+  // ============================================================
+  function updateFormEditState(formId, isEditing, type) {
+    const form = el(formId);
+    if (!form) return;
+    const btn = form.querySelector('button[type=submit]');
+    const cancelBtn = form.querySelector('.btn-cancel-edit');
+
+    if (btn) btn.textContent = isEditing ? `Update ${type === 'film' ? 'Film' : type === 'cinema' ? 'Bioskop' : 'Jadwal'}` : `Simpan ${type === 'film' ? 'Film' : type === 'cinema' ? 'Bioskop' : 'Jadwal'}`;
+    if (cancelBtn) cancelBtn.style.display = isEditing ? 'inline-flex' : 'none';
+
+    // Scroll form into view
+    if (isEditing && form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function handleEdit(action, id) {
+    const data = window._adminData;
+    if (!data) return;
+
+    if (action === 'edit-film') {
+      const film = data.films.find(f => String(f.id) === String(id));
+      if (!film) return;
+      editingId.film = id;
+      setActiveSection('films');
+
+      // Switch to form tab
+      const formTab = document.querySelector('.tab[data-tab="film-form"]');
+      if (formTab) formTab.click();
+
+      const form = el('form-film');
+      if (form) {
+        form.querySelector('[name=title]').value = film.title || '';
+        form.querySelector('[name=duration]').value = film.duration || '';
+        form.querySelector('[name=year]').value = film.year || '';
+        form.querySelector('[name=rating]').value = film.rating || '';
+        form.querySelector('[name=poster]').value = film.poster || '';
+        form.querySelector('[name=synopsis]').value = film.synopsis || '';
+        form.querySelector('[name=status]').value =
+          film.is_now_playing ? 'now_playing' : film.is_coming_soon ? 'coming_soon' : 'now_playing';
+      }
+
+      const currentGenres = film.genre ? film.genre.split(',').map(g => g.trim()) : [];
+      renderGenreMultiSelect('genre-multiselect', currentGenres);
+      updateFormEditState('form-film', true, 'film');
+      showToast(`Edit mode: ${film.title}`);
+    }
+
+    if (action === 'edit-cinema') {
+      const cinema = data.cinemas.find(c => String(c.id) === String(id));
+      if (!cinema) return;
+      editingId.cinema = id;
+      setActiveSection('cinemas');
+
+      const form = el('form-cinema');
+      if (form) {
+        form.querySelector('[name=name]').value = cinema.name || '';
+        form.querySelector('[name=city]').value = cinema.city || '';
+        form.querySelector('[name=location]').value = cinema.location || '';
+      }
+      updateFormEditState('form-cinema', true, 'cinema');
+      showToast(`Edit mode: ${cinema.name}`);
+    }
+
+    if (action === 'edit-showtime') {
+      const showtime = data.showtimes.find(s => String(s.id) === String(id));
+      if (!showtime) return;
+      editingId.showtime = id;
+      setActiveSection('showtimes');
+
+      // Populate main selects
+      const movieSel = el('movie-select');
+      const studioCinemaInput = el('cinema-select');
+      if (movieSel) movieSel.value = showtime.movie_id;
+      if (studioCinemaInput) studioCinemaInput.value = showtime.cinema_id;
+
+      // Clear rows and add one pre-filled
+      const rowsContainer = el('schedule-rows');
+      if (rowsContainer) rowsContainer.innerHTML = '';
+      addScheduleRow(showtime.show_date, showtime.show_time, showtime.studio_id);
+
+      const priceInput = el('bulk-price');
+      if (priceInput) priceInput.value = showtime.price || 50000;
+
+      updateFormEditState('form-showtime', true, 'showtime');
+      showToast(`Edit mode: Jadwal #${id}`);
+    }
+  }
+
+  // ============================================================
+  // DELETE HANDLERS
+  // ============================================================
+  const deleteRoutes = {
+    'delete-film': id => `/api/movies/${id}`,
+    'delete-cinema': id => `/api/cinemas/${id}`,
+    'delete-showtime': id => `/api/schedules/${id}`,
+    'delete-notification': id => `/api/notifications/${id}`,
+    'delete-studio': id => `/api/studios/${id}`,
+    'delete-user': id => `/api/users/${id}`
+  };
+
+  async function handleDelete(action, id) {
+    const url = deleteRoutes[action] ? deleteRoutes[action](id) : null;
+    if (!url) return;
+    if (!confirm('Yakin ingin menghapus data ini?')) return;
+    await fetchJson(url, { method: 'DELETE' });
+    showToast('Data berhasil dihapus');
+    await loadData();
+  }
+
+  // ============================================================
+  // USER MANAGEMENT
+  // ============================================================
+  async function handleUserAction(action, id, pw) {
+    if (action === 'view-pw') {
+      alert(`Password user #${id}:\n\n${pw || '(kosong)'}\n\n⚠️ Jangan bagikan ke siapapun.`);
+      return;
+    }
+    if (action === 'reset-pw') {
+      const newPw = prompt(`Reset password user #${id}.\nMasukkan password baru:`);
+      if (!newPw) return;
+      await fetchJson(`/api/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPw })
+      });
+      showToast('Password berhasil direset');
+      await loadData();
+    }
+  }
+
+  // ============================================================
+  // DELEGATE EVENTS
+  // ============================================================
+  function bindDelegatedActions() {
+    document.addEventListener('click', async event => {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+      const action = target.dataset.action;
+      const id = target.dataset.id;
+      const pw = target.dataset.pw;
+      try {
+        if (action.startsWith('delete-')) await handleDelete(action, id);
+        else if (action.startsWith('edit-')) await handleEdit(action, id);
+        else if (action === 'view-pw' || action === 'reset-pw') await handleUserAction(action, id, pw);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  }
+
+  // ============================================================
+  // BIND UI
+  // ============================================================
+  function buildFilmsSection() {
+    const filmsSection = el('films');
+    if (!filmsSection) return;
+
+    // Find the form and add genre multi-select
+    const form = el('form-film');
+    if (!form) return;
+
+    // Insert genre multiselect after the status field
+    const statusField = form.querySelector('.field:has([name=status])') || form.querySelector('.field');
+    if (statusField && !el('genre-multiselect-wrapper')) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field full';
+      wrapper.id = 'genre-multiselect-wrapper';
+      wrapper.innerHTML = `
+        <label>Genre <span style="color:var(--muted);font-weight:400;">(pilih yang sesuai)</span></label>
+        <div id="genre-multiselect" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:12px;min-height:44px;"></div>`;
+      form.insertBefore(wrapper, form.querySelector('button[type=submit]')?.closest('.field') || form.lastElementChild);
+    }
+
+    // Add cancel edit button
+    const submitBtn = form.querySelector('button[type=submit]')?.closest('.field');
+    if (submitBtn && !form.querySelector('.btn-cancel-edit')) {
+      const cancelWrapper = document.createElement('div');
+      cancelWrapper.className = 'field';
+      cancelWrapper.innerHTML = `<button type="button" class="btn-cancel-edit btn btn-ghost" style="display:none;" onclick="BE_TIX_ADMIN.cancelEditFilm()">✕ Batal Edit</button>`;
+      submitBtn.parentElement.insertBefore(cancelWrapper, submitBtn.nextSibling);
+    }
+
+    renderGenreMultiSelect('genre-multiselect');
+  }
+
+  function buildShowtimesSection() {
+    const section = el('showtimes');
+    if (!section) return;
+
+    // Replace studio_id text input with dropdown
+    const form = el('form-showtime');
+    if (!form) return;
+
+    // Replace studio_id manual input with select
+    const studioField = form.querySelector('[name=studio_id]');
+    if (studioField && studioField.tagName === 'INPUT') {
+      const sel = document.createElement('select');
+      sel.name = 'studio_id';
+      sel.id = 'studio-select';
+      sel.style.cssText = studioField.style.cssText;
+      sel.className = studioField.className;
+      sel.innerHTML = `<option value="">Pilih Studio</option>`;
+      studioField.parentElement.replaceChild(sel, studioField);
+    }
+
+    // Add bulk schedule rows container
+    if (!el('schedule-rows-wrapper')) {
+      const wrapper = document.createElement('div');
+      wrapper.id = 'schedule-rows-wrapper';
+      wrapper.className = 'field full';
+      wrapper.innerHTML = `
+        <label>Jadwal Tayang <span style="color:var(--muted);font-weight:400;">(bisa bulk per film)</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:6px;">
+          <span style="font-size:11px;color:var(--muted);padding:4px 0;">Tanggal</span>
+          <span style="font-size:11px;color:var(--muted);padding:4px 0;">Jam</span>
+          <span style="font-size:11px;color:var(--muted);padding:4px 0;">Studio</span>
+          <span style="font-size:11px;color:var(--muted);padding:4px 0;">Harga</span>
+          <span></span>
+        </div>
+        <div id="schedule-rows"></div>
+        <button type="button" class="btn btn-ghost" style="margin-top:6px;width:100%;" onclick="BE_TIX_ADMIN.addScheduleRow()">+ Tambah Jadwal</button>`;
+      const submitField = form.querySelector('button[type=submit]')?.closest('.field');
+      if (submitField) form.insertBefore(wrapper, submitField);
+
+      // Remove old date/time fields
+      ['show_date','show_time','price'].forEach(name => {
+        const f = form.querySelector(`[name=${name}]`);
+        if (f) f.closest('.field')?.remove();
+      });
+
+      addScheduleRow();
+    }
+
+    // Cancel edit button
+    if (!form.querySelector('.btn-cancel-edit')) {
+      const submitField = form.querySelector('button[type=submit]')?.closest('.field');
+      if (submitField) {
+        const cancelEl = document.createElement('div');
+        cancelEl.className = 'field';
+        cancelEl.innerHTML = `<button type="button" class="btn btn-ghost btn-cancel-edit" style="display:none;" onclick="BE_TIX_ADMIN.cancelEditShowtime()">✕ Batal Edit</button>`;
+        submitField.parentElement.insertBefore(cancelEl, submitField.nextSibling);
+      }
+    }
+  }
+
+  function buildStudiosSection() {
+    const section = el('cinemas');
+    if (!section) return;
+    if (el('studio-section-inner')) return;
+
+    const studioPanel = document.createElement('div');
+    studioPanel.id = 'studio-section-inner';
+    studioPanel.style.marginTop = '24px';
+    studioPanel.innerHTML = `
+      <div class="panel-head">
+        <div>
+          <h2 style="font-size:16px;">Studio</h2>
+          <p style="color:var(--muted);font-size:12px;">Studio harus ada sebelum membuat jadwal.</p>
+        </div>
+      </div>
+      <form id="form-studio" class="form-grid">
+        <div class="field">
+          <label>Bioskop</label>
+          <select name="cinema_id" id="studio-cinema-select" required>
+            <option value="">Pilih Bioskop</option>
+          </select>
+        </div>
+        <div class="field"><label>Nama Studio</label><input name="name" placeholder="Studio 1, Studio IMAX" required></div>
+        <div class="field"><label>Kapasitas Kursi</label><input name="seat_capacity" type="number" value="40" placeholder="40"></div>
+        <div class="field" style="align-self:end;"><button class="btn btn-primary" type="submit">+ Buat Studio</button></div>
+      </form>
+      <div style="height:14px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nama Studio</th><th>Bioskop</th><th>Kapasitas</th><th>Aksi</th></tr></thead>
+          <tbody id="table-studios"></tbody>
+        </table>
+      </div>`;
+    section.appendChild(studioPanel);
+
+    const formStudio = el('form-studio');
+    if (formStudio) {
+      formStudio.addEventListener('submit', async e => {
+        e.preventDefault();
+        try { await submitStudio(formStudio); } catch (err) { showToast(err.message, 'error'); }
+      });
+    }
+  }
+
+  function bindUI() {
+    document.querySelectorAll('.nav-btn[data-target]').forEach(btn => {
+      btn.addEventListener('click', () => setActiveSection(btn.dataset.target));
+    });
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const parent = tab.parentElement;
+        parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        const scope = tab.closest('.panel');
+        scope.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        const sec = scope.querySelector('#' + target);
+        if (sec) sec.classList.add('active');
+      });
+    });
+
+    const formFilm = el('form-film');
+    const formCinema = el('form-cinema');
+    const formShowtime = el('form-showtime');
+    const formNotification = el('form-notification');
+    const refreshAll = el('refresh-all');
+    const logoutAdmin = el('logout-admin');
+
+    if (formFilm) formFilm.addEventListener('submit', async e => {
+      e.preventDefault();
+      try { await submitFilm(formFilm); } catch (err) { showToast(err.message, 'error'); }
+    });
+
+    if (formCinema) formCinema.addEventListener('submit', async e => {
+      e.preventDefault();
+      try { await submitCinema(formCinema); } catch (err) { showToast(err.message, 'error'); }
+    });
+
+    if (formShowtime) formShowtime.addEventListener('submit', async e => {
+      e.preventDefault();
+      try { await submitShowtime(formShowtime); } catch (err) { showToast(err.message, 'error'); }
+    });
+
+    if (formNotification) formNotification.addEventListener('submit', async e => {
+      e.preventDefault();
+      try { await submitNotification(formNotification); } catch (err) { showToast(err.message, 'error'); }
+    });
+
+    if (refreshAll) refreshAll.addEventListener('click', () => loadData().catch(err => showToast(err.message, 'error')));
+
+    if (logoutAdmin) logoutAdmin.addEventListener('click', () => {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      window.location.assign('/login.html');
+    });
+  }
+
+  // ============================================================
+  // CANCEL EDIT
+  // ============================================================
+  function cancelEditFilm() {
+    editingId.film = null;
+    const form = el('form-film');
+    if (form) resetForm(form);
+    renderGenreMultiSelect('genre-multiselect');
+    updateFormEditState('form-film', false, 'film');
+  }
+
+  function cancelEditCinema() {
+    editingId.cinema = null;
+    const form = el('form-cinema');
+    if (form) resetForm(form);
+    updateFormEditState('form-cinema', false, 'cinema');
+  }
+
+  function cancelEditShowtime() {
+    editingId.showtime = null;
+    const rowsContainer = el('schedule-rows');
+    if (rowsContainer) rowsContainer.innerHTML = '';
+    addScheduleRow();
+    updateFormEditState('form-showtime', false, 'showtime');
+  }
+
+  function toggleGenreChip(checkbox) {
+    const label = checkbox.closest('label');
+    if (!label) return;
+    const isChecked = checkbox.checked;
+    label.style.borderColor = isChecked ? 'var(--red)' : 'var(--line)';
+    label.style.background = isChecked ? 'rgba(230,57,70,0.14)' : 'rgba(255,255,255,0.03)';
+    label.style.color = isChecked ? '#fff' : 'var(--muted)';
+  }
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = requireAdmin();
+    if (!user) return;
+
+    const info = el('admin-info');
+    if (info) info.textContent = `${user.name || user.email || 'Admin'} • ${user.email || ''}`.trim();
+
+    bindUI();
+    buildFilmsSection();
+    buildShowtimesSection();
+    buildStudiosSection();
+    bindDelegatedActions();
+
+    try {
+      await loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // ============================================================
+  // EXPOSE
+  // ============================================================
+  window.BE_TIX_ADMIN = {
+    loadData, requireAdmin, showToast, setActiveSection,
+    addScheduleRow, cancelEditFilm, cancelEditCinema, cancelEditShowtime,
+    toggleGenreChip
+  };
+})();
+
+
+2. api.js
+
+// ============================================
+//  BE TIX — API Layer
+//  Safe wrappers for AI features and backend
+//  requests that may not always be available.
+// ============================================
+
+(function () {
+  const API_URL = 'https://api.anthropic.com/v1/messages';
+  const MODEL = 'claude-sonnet-4-20250514';
+
+  function safeJsonParse(value, fallback = null) {
+    try {
+      return value ? JSON.parse(value) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function callAnthropicAPI(prompt, maxTokens = 300) {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.content
+        ?.filter((block) => block.type === 'text')
+        ?.map((block) => block.text)
+        ?.join('') || '';
+
+      return text.trim();
+    } catch (err) {
+      console.error('Anthropic API gagal:', err);
+      return '';
+    }
+  }
+
+  async function fetchMovieSynopsis(movie) {
+    if (!movie || !movie.title) return 'Sinopsis belum tersedia.';
+
+    const genreText = Array.isArray(movie.genreList)
+      ? movie.genreList.join(', ')
+      : String(movie.genre || movie.genreText || 'film');
+
+    const prompt = `Kamu adalah penulis sinopsis film profesional Indonesia. 
+Tulis sinopsis menarik dalam bahasa Indonesia untuk film berjudul "${movie.title}" 
+bergenre ${genreText}, tahun ${movie.year || '-'}, durasi ${movie.duration || '-'}. 
+Sinopsis harus terdiri dari 3-4 kalimat yang informatif dan menggugah rasa ingin tahu.
+Langsung tulis sinopsisnya tanpa label, tanda kutip, atau penjelasan tambahan.`;
+
+    const result = await callAnthropicAPI(prompt, 200);
+    return result || movie.synopsis || 'Sinopsis belum tersedia.';
+  }
+
+  async function fetchPersonalRecommendation(userProfile = {}) {
+    const favoriteGenres = userProfile.favoriteGenres || ['aksi', 'sci-fi'];
+    const lastWatched = userProfile.lastWatched || 'Dune: Part Two';
+
+    const prompt = `Kamu adalah asisten rekomendasi film BE TIX yang ramah dan personal.
+Pengguna bernama ${userProfile.name || userProfile.nama || 'Andi'} suka film ${favoriteGenres.join(' dan ')},
+
+terakhir menonton "${lastWatched}".
+Film yang tersedia saat ini: Interstellar, Deadpool & Wolverine, Inside Out 3, Transformers One.
+Tulis 1 kalimat rekomendasi yang personal, antusias, dan spesifik (sebutkan 1 judul film).
+Gunakan nada santai, tidak formal. Langsung tulis kalimatnya saja tanpa awalan apapun.`;
+
+    const result = await callAnthropicAPI(prompt, 120);
+    return result || 'Selamat datang di BE TIX! Coba cek film terbaru hari ini.';
+  }
+
+  async function fetchPromoSuggestion(movieTitle) {
+    const prompt = `Kamu adalah asisten BE TIX. Film yang dipilih pengguna: "${movieTitle}".
+Buat 1 kalimat singkat yang menyarankan promo atau diskon yang relevan (contoh: cashback, voucher member).
+Nada promosi tapi tidak berlebihan. Maksimal 20 kata. Langsung tulis kalimatnya saja.`;
+
+    const result = await callAnthropicAPI(prompt, 80);
+    return result || 'Cek promo dan voucher aktif untuk hemat lebih banyak.';
+  }
+
+  async function fetchSeatRecommendation(cinema, time) {
+    const prompt = `Kamu adalah asisten pemilihan kursi bioskop BE TIX.
+Bioskop: ${cinema}, jam tayang: ${time}.
+Berikan 1 saran singkat tentang posisi kursi terbaik untuk pengalaman menonton optimal.
+Maksimal 15 kata. Langsung tulis sarannya saja tanpa awalan.`;
+
+    const result = await callAnthropicAPI(prompt, 60);
+    return result || 'Pilih kursi tengah agak belakang untuk pengalaman terbaik.';
+  }
+
+  // ------------------------------
+  // Backend API helpers
+  // ------------------------------
+  async function requestJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || `Request gagal (${response.status})`);
+    }
+    return data;
+  }
+
+  async function getMovies() {
+    try {
+      const data = await requestJson('/api/film');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil film:', err);
+      return [];
+    }
+  }
+
+  async function getCinemas() {
+    try {
+      const data = await requestJson('/api/bioskop');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil bioskop:', err);
+      return [];
+    }
+  }
+
+  async function getShowtimes() {
+    try {
+      const data = await requestJson('/api/jadwal');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil jadwal:', err);
+      return [];
+    }
+  }
+
+  async function getPromos() {
+    try {
+      const data = await requestJson('/api/promos');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil promo:', err);
+      return [];
+    }
+  }
+
+  async function getNotifications() {
+    try {
+      const data = await requestJson('/api/notifications');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil notifikasi:', err);
+      return [];
+    }
+  }
+
+  async function getTickets() {
+    try {
+      const data = await requestJson('/api/tiket');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil tiket:', err);
+      return [];
+    }
+  }
+
+  async function getTransactions() {
+    try {
+      const data = await requestJson('/api/transaksi');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil transaksi:', err);
+      return [];
+    }
+  }
+
+  async function getUsers() {
+    try {
+      const data = await requestJson('/api/users');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Gagal mengambil users:', err);
+      return [];
+    }
+  }
+
+  // ------------------------------
+  // Expose globals for legacy calls
+  // ------------------------------
+  window.callAnthropicAPI = callAnthropicAPI;
+  window.fetchMovieSynopsis = fetchMovieSynopsis;
+  window.fetchPersonalRecommendation = fetchPersonalRecommendation;
+  window.fetchPromoSuggestion = fetchPromoSuggestion;
+  window.fetchSeatRecommendation = fetchSeatRecommendation;
+
+  window.getMovies = getMovies;
+  window.getCinemas = getCinemas;
+  window.getShowtimes = getShowtimes;
+  window.getPromos = getPromos;
+  window.getNotifications = getNotifications;
+  window.getTickets = getTickets;
+  window.getTransactions = getTransactions;
+  window.getUsers = getUsers;
+
+  window.BE_TIX_API = {
+    requestJson,
+    safeJsonParse,
+    getMovies,
+    getCinemas,
+    getShowtimes,
+    getPromos,
+    getNotifications,
+    getTickets,
+    getTransactions,
+    getUsers,
+    fetchMovieSynopsis,
+    fetchPersonalRecommendation,
+    fetchPromoSuggestion,
+    fetchSeatRecommendation
+  };
+})();
+
+
+3. app.js
+
+// ============================================
+//  BE TIX — App Bootstrap Layer
+//  Ringan, aman, dan tidak double-render.
+//  Fokus pada startup, fallback, dan UI helpers.
+// ============================================
+
+(function () {
+  function safeCall(fn) {
+    try {
+      if (typeof fn === 'function') fn();
+    } catch (err) {
+      console.error('App bootstrap error:', err);
+    }
+  }
+
+  function syncProfile() {
+    safeCall(function () {
+      if (typeof window.syncUserProfile === 'function') {
+        window.syncUserProfile();
+      }
+    });
+  }
+
+  function bindSuccessModal() {
+    const modal = document.getElementById('success-modal');
+    if (!modal) return;
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('is-open');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        modal.classList.remove('is-open');
+      }
+    });
+  }
+
+  function initCurrentPage() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) {
+      if (typeof window.navigateTo === 'function') {
+        window.navigateTo('beranda', { replace: true });
+      }
+      return;
+    }
+
+    const pageName = activePage.id.replace('page-', '');
+    if (typeof window.switchNav === 'function') {
+      const navEl = document.querySelector(`.bottom-item#btn-${pageName}`) || document.querySelector(`.nav-item[data-page="${pageName}"]`);
+      if (navEl && navEl.classList) {
+        navEl.classList.add('active');
+      }
+    }
+  }
+
+  function bindGlobalErrorGuard() {
+    window.addEventListener('error', (event) => {
+      console.error('Global error:', event.error || event.message || event);
+    });
+  }
+
+  function refreshDynamicUI() {
+    syncProfile();
+
+    if (window.BE_TIX) {
+      safeCall(() => window.BE_TIX.renderNowPlaying && window.BE_TIX.renderNowPlaying());
+      safeCall(() => window.BE_TIX.renderComingSoon && window.BE_TIX.renderComingSoon());
+      safeCall(() => window.BE_TIX.renderAllMovies && window.BE_TIX.renderAllMovies());
+      safeCall(() => window.BE_TIX.renderNotifications && window.BE_TIX.renderNotifications());
+      safeCall(() => window.BE_TIX.loadAIRecommendation && window.BE_TIX.loadAIRecommendation());
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    bindGlobalErrorGuard();
+    bindSuccessModal();
+    initCurrentPage();
+    refreshDynamicUI();
+
+    // Menjaga query search tetap konsisten jika user reload halaman.
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && typeof searchInput.value === 'string') {
+      searchInput.value = searchInput.value || '';
+    }
+  });
+
+  // Expose helper kecil jika perlu dipakai file lain.
+  window.BE_TIX_APP = {
+    refreshDynamicUI,
+    syncProfile,
+    initCurrentPage
+  };
+})();
+
+
+4. auth.js
+
+// ============================================
+//  BE TIX — Auth Layer (js/auth.js)
+//  Manajemen Sesi, Proteksi, & Profil
+// ============================================
+
+const Auth = {
+  // Key untuk localStorage
+  SESSION_KEY: 'user_session',
+
+  /**
+   * Mengambil data user yang sedang login
+   */
+  getUser: function() {
+    const session = localStorage.getItem(this.SESSION_KEY);
+    return session ? JSON.parse(session) : null;
+  },
+
+  /**
+   * Cek apakah user sudah login. 
+   * Jika tidak, arahkan ke login.html
+   */
+  checkAuth: function() {
+    const user = this.getUser();
+    const currentPage = window.location.pathname;
+
+    // Jika belum login dan mencoba akses index atau admin
+    if (!user && (currentPage.includes('index.html') || currentPage === '/' || currentPage.includes('admin.html'))) {
+      window.location.href = '/login.html';
+      return false;
+    }
+
+    // Jika sudah login tapi mencoba akses login/register lagi
+    if (user && (currentPage.includes('login.html') || currentPage.includes('register.html'))) {
+      window.location.href = '/index.html';
+      return false;
+    }
+
+    // Jika user biasa mencoba masuk ke admin.html
+    if (user && user.role !== 'admin' && currentPage.includes('admin.html')) {
+      window.location.href = '/index.html';
+      return false;
+    }
+
+    return true;
+  },
+
+  /**
+   * Keluar dari aplikasi
+   */
+  logout: function() {
+    localStorage.removeItem(this.SESSION_KEY);
+    window.location.href = '/login.html';
+  },
+
+  /**
+   * Sinkronisasi Ganti Password ke Database
+   */
+  changePassword: async function(oldPassword, newPassword) {
+    const user = this.getUser();
+    if (!user) return { success: false, message: 'Sesi habis' };
+
+    try {
+      const response = await fetch('/api/users/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          oldPassword,
+          newPassword
+        })
+      });
+      return await response.json();
+    } catch (err) {
+      return { success: false, message: 'Gagal menghubungi server' };
+    }
+  },
+
+  /**
+   * Hapus Akun Permanen
+   */
+  deleteAccount: async function() {
+    const user = this.getUser();
+    if (!user) return;
+
+    try {
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        this.logout();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: 'Gagal menghapus akun' };
+    }
+  },
+
+  /**
+   * Update UI berdasarkan siapa yang login (Admin/User)
+   */
+  initUI: function() {
+    const user = this.getUser();
+    if (!user) return;
+
+    // Tampilkan nama di profil
+    const profileName = document.getElementById('user-profile-name');
+    const profileEmail = document.getElementById('user-profile-email');
+    if (profileName) profileName.textContent = user.name || user.username || '';
+    if (profileEmail) profileEmail.textContent = user.email;
+
+    // Tampilkan menu admin jika role adalah admin
+    const adminMenu = document.getElementById('admin-link'); // Asumsi ada ID ini di nav
+    if (adminMenu) {
+      adminMenu.style.display = (user.role === 'admin') ? 'flex' : 'none';
+    }
+  }
+};
+
+// Jalankan proteksi otomatis saat script dimuat
+Auth.checkAuth();
+
+// Expose ke global window agar bisa dipanggil dari HTML onclick
+window.auth = Auth;
+
+5. data.js
+
+// ============================================
+//  BE TIX — Data Layer
+//  Minimal safe defaults for legacy compatibility.
+//  Actual content is fetched from backend APIs.
+// ============================================
+
+(function () {
+  const STORAGE_KEYS = {
+    activeTickets: 'betix_active_tickets',
+    historyTickets: 'betix_history_tickets',
+    notifications: 'betix_notifications',
+    selectedMovie: 'betix_selected_movie',
+    selectedCinema: 'betix_selected_cinema',
+    selectedDate: 'betix_selected_date',
+    selectedShowtime: 'betix_selected_showtime',
+    selectedPayment: 'betix_selected_payment',
+    selectedSeats: 'betix_selected_seats',
+    searchQuery: 'betix_search_query',
+    genre: 'betix_genre_filter'
+  };
+
+  function safeParse(raw, fallback) {
+    try {
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function getStoredArray(key) {
+    return safeParse(localStorage.getItem(key), []);
+  }
+
+  function getStoredValue(key, fallback = null) {
+    return safeParse(localStorage.getItem(key), fallback);
+  }
+
+  function setStoredValue(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // ignore storage errors in sandbox / quota issues
+    }
+  }
+
+  const DATA = {
+    movies: [],
+    cinemas: [],
+    showtimes: [],
+    promos: [],
+    notifications: [],
+    activeTickets: [],
+    historyTickets: [],
+    selectedMovie: null,
+    selectedCinema: null,
+    selectedDate: null,
+    selectedShowtime: null,
+    selectedPayment: null,
+    selectedSeats: [],
+    searchQuery: '',
+    genreFilter: 'semua'
+  };
+
+  function syncLocalDataFromStorage() {
+    DATA.activeTickets = getStoredArray(STORAGE_KEYS.activeTickets);
+    DATA.historyTickets = getStoredArray(STORAGE_KEYS.historyTickets);
+    DATA.notifications = getStoredArray(STORAGE_KEYS.notifications);
+    DATA.selectedMovie = getStoredValue(STORAGE_KEYS.selectedMovie, null);
+    DATA.selectedCinema = getStoredValue(STORAGE_KEYS.selectedCinema, null);
+    DATA.selectedDate = getStoredValue(STORAGE_KEYS.selectedDate, null);
+    DATA.selectedShowtime = getStoredValue(STORAGE_KEYS.selectedShowtime, null);
+    DATA.selectedPayment = getStoredValue(STORAGE_KEYS.selectedPayment, null);
+    DATA.selectedSeats = getStoredValue(STORAGE_KEYS.selectedSeats, []);
+    DATA.searchQuery = getStoredValue(STORAGE_KEYS.searchQuery, '');
+    DATA.genreFilter = getStoredValue(STORAGE_KEYS.genre, 'semua');
+  }
+
+  // Keep the legacy shape alive for scripts that still read DATA directly.
+  syncLocalDataFromStorage();
+
+  window.DATA = DATA;
+  window.BE_TIX_STORAGE_KEYS = STORAGE_KEYS;
+  window.BE_TIX_DATA = {
+    DATA,
+    STORAGE_KEYS,
+    syncLocalDataFromStorage,
+    getStoredArray,
+    getStoredValue,
+    setStoredValue
+  };
+})();
+
+
+6. navigation.js
+
+// ============================================
+//  BE TIX — Navigation Layer
+//  Refactor aman untuk history back,
+//  active state sync, dan page routing
+// ============================================
+
+(function () {
+  const state = {
+    history: [],
+    currentPage: null,
+    suppressHistory: false
+  };
+
+  function getActivePageId() {
+    const active = document.querySelector('.page.active');
+    return active ? active.id : null;
+  }
+
+  function setActiveNav(page, el, isBottom = false) {
+    document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+    document.querySelectorAll('.bottom-item').forEach((item) => item.classList.remove('active'));
+
+    const topNav = document.querySelector(`.nav-item[data-page="${page}"]`);
+    const bottomNav = document.getElementById(`btn-${page}`);
+
+    if (topNav) topNav.classList.add('active');
+    if (bottomNav) bottomNav.classList.add('active');
+    if (el && el.classList) el.classList.add('active');
+  }
+
+  function showPage(pageId) {
+    document.querySelectorAll('.page').forEach((page) => page.classList.remove('active'));
+    const target = document.getElementById(pageId);
+    if (target) target.classList.add('active');
+  }
+
+  function pushHistory(pageId) {
+    if (!pageId) return;
+    if (state.suppressHistory) return;
+    if (state.currentPage && state.currentPage !== pageId) {
+      state.history.push(state.currentPage);
+    }
+    state.currentPage = pageId;
+  }
+
+  function navigateTo(page, options = {}) {
+    const pageId = `page-${page}`;
+    const target = document.getElementById(pageId);
+    const currentPageId = getActivePageId();
+
+    if (!target) return;
+
+    if (!options.replace) {
+      if (currentPageId && currentPageId !== pageId) {
+        state.history.push(currentPageId);
+      }
+    }
+
+    state.currentPage = pageId;
+    showPage(pageId);
+
+    const navEl = options.el || document.querySelector(`.nav-item[data-page="${page}"]`) || document.getElementById(`btn-${page}`);
+    setActiveNav(page, navEl, !!options.isBottom);
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderShowtimes === 'function' && page === 'pesan') {
+      window.BE_TIX.renderDatePicker();
+      window.BE_TIX.renderShowtimes();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderSeatGrid === 'function' && page === 'kursi') {
+      window.BE_TIX.renderSeatGrid();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderPayMethods === 'function' && page === 'bayar') {
+      window.BE_TIX.renderPayMethods();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderEtiket === 'function' && page === 'etiket') {
+      window.BE_TIX.renderEtiket();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderRiwayat === 'function' && page === 'riwayat') {
+      window.BE_TIX.renderRiwayat();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderNotifications === 'function' && page === 'notif') {
+      window.BE_TIX.renderNotifications();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderPromos === 'function' && page === 'promo') {
+      window.BE_TIX.renderPromos();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderAllMovies === 'function' && page === 'film') {
+      window.BE_TIX.renderAllMovies();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.loadBioskop === 'function' && page === 'bioskop') {
+      window.BE_TIX.loadBioskop();
+    }
+
+    if (window.BE_TIX && typeof window.BE_TIX.renderNowPlaying === 'function' && page === 'beranda') {
+      window.BE_TIX.renderNowPlaying();
+      window.BE_TIX.renderComingSoon();
+      window.BE_TIX.loadAIRecommendation();
+    }
+  }
+
+  function goBack() {
+    const previous = state.history.pop();
+    if (!previous) {
+      navigateTo('beranda', { replace: true });
+      return;
+    }
+
+    state.suppressHistory = true;
+    showPage(previous);
+
+    const pageName = previous.replace('page-', '');
+    setActiveNav(pageName, null);
+    state.currentPage = previous;
+    state.suppressHistory = false;
+
+    if (window.BE_TIX) {
+      if (pageName === 'pesan') {
+        window.BE_TIX.renderDatePicker();
+        window.BE_TIX.renderShowtimes();
+      } else if (pageName === 'kursi') {
+        window.BE_TIX.renderSeatGrid();
+      } else if (pageName === 'bayar') {
+        window.BE_TIX.renderPayMethods();
+      } else if (pageName === 'etiket') {
+        window.BE_TIX.renderEtiket();
+      } else if (pageName === 'riwayat') {
+        window.BE_TIX.renderRiwayat();
+      } else if (pageName === 'notif') {
+        window.BE_TIX.renderNotifications();
+      } else if (pageName === 'promo') {
+        window.BE_TIX.renderPromos();
+      } else if (pageName === 'film') {
+        window.BE_TIX.renderAllMovies();
+      } else if (pageName === 'bioskop') {
+        window.BE_TIX.loadBioskop();
+      } else if (pageName === 'beranda') {
+        window.BE_TIX.renderNowPlaying();
+        window.BE_TIX.renderComingSoon();
+      }
+    }
+  }
+
+  function switchNav(page, el, isBottom = false) {
+    navigateTo(page, { el, isBottom });
+  }
+
+  function syncInitialPage() {
+    const defaultPage = getActivePageId() || 'page-beranda';
+    state.currentPage = defaultPage;
+    const pageName = defaultPage.replace('page-', '');
+    setActiveNav(pageName);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    syncInitialPage();
+  });
+
+  window.navigateTo = navigateTo;
+  window.switchNav = switchNav;
+  window.goBack = goBack;
+  window.__BE_TIX_NAV__ = state;
+})();
+
+
+7. render.js
+
+// ============================================
+//  BE TIX — Render Layer (Fixed & Enhanced)
+//  Fixes:
+//  1. API endpoint /api/film → /api/movies
+//  2. Film cards now render correctly
+//  3. Empty state full-width borders
+//  4. Hero banner guard when no film
+//  5. "Lihat Semua" filter by type (now/coming)
+//  6. Search navigates to film page
+//  7. Notification badge clears on open
+//  8. No bottom profile nav item
+// ============================================
+
+(function () {
+  const GENRES = ['Aksi','Drama','Komedi','Horor','Thriller','Animasi','Sci-Fi','Romansa','Petualangan','Dokumenter','Fantasi','Biografi'];
+
+  const EMPTY_TEXT = {
+    nowPlaying: 'Tidak ada film yang sedang tayang.',
+    comingSoon: 'Belum ada film segera hadir.',
+    allMovies: 'Belum ada film tersedia.',
+    cinemas: 'Belum ada bioskop tersedia.',
+    showtimes: 'Belum ada jadwal tayang.',
+    seats: 'Pilih jadwal untuk menampilkan kursi.',
+    tickets: 'Belum ada tiket aktif.',
+    history: 'Belum ada riwayat transaksi.',
+    promos: 'Belum ada promo tersedia.',
+    notifications: 'Belum ada notifikasi.',
+    search: 'Tidak ditemukan hasil pencarian.'
+  };
+
+  // ✅ FIXED: Use /api/movies instead of /api/film
+  const API = {
+    movies: '/api/movies',
+    cinemas: '/api/cinemas',
+    schedules: '/api/schedules',
+    promos: '/api/promos',
+    notifications: '/api/notifications',
+    tickets: '/api/tickets'
+  };
+
+  const STORAGE_KEYS = {
+    ticketsActive: 'betix_active_tickets',
+    ticketsHistory: 'betix_history_tickets',
+    notifications: 'betix_notifications',
+    selectedMovie: 'betix_selected_movie',
+    selectedCinema: 'betix_selected_cinema',
+    selectedDate: 'betix_selected_date',
+    selectedShowtime: 'betix_selected_showtime',
+    selectedPayment: 'betix_selected_payment',
+    selectedSeats: 'betix_selected_seats',
+    searchQuery: 'betix_search_query',
+    genre: 'betix_genre_filter',
+    filmFilter: 'betix_film_filter'
+  };
+
+  const state = {
+    movies: [],
+    cinemas: [],
+    showtimes: [],
+    promos: [],
+    notifications: [],
+    activeTickets: [],
+    historyTickets: [],
+    moviesPromise: null,
+    cinemasPromise: null,
+    showtimesPromise: null,
+    promosPromise: null,
+    notificationsPromise: null,
+    selectedMovie: null,
+    selectedCinema: null,
+    selectedDate: null,
+    selectedShowtime: null,
+    selectedPayment: null,
+    selectedSeats: [],
+    searchQuery: '',
+    genreFilter: 'semua',
+    filmFilter: 'semua', // 'semua' | 'now_playing' | 'coming_soon'
+    heroIndex: 0,
+    heroTimer: null,
+    notifRead: false
+  };
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  function safeArray(value) { return Array.isArray(value) ? value : []; }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function toTitleCase(value) {
+    return String(value || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function formatDateShort(date) {
+    return new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: '2-digit', month: 'short' }).format(date);
+  }
+
+  function formatDateLong(date) {
+    return new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(date);
+  }
+
+  function formatCurrency(value) {
+    return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+  }
+
+  function getJSON(key, fallback) {
+    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; } catch { return fallback; }
+  }
+
+  function setJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { }
+  }
+
+  function requestJson(url, fallback = []) {
+    return fetch(url)
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+      .catch(err => { console.warn(`Fetch ${url} failed:`, err.message); return fallback; });
+  }
+
+  function getContainer(...ids) {
+    for (const id of ids) { const el = document.getElementById(id); if (el) return el; }
+    return null;
+  }
+
+  // ✅ FIXED: Full-width empty state (no small border)
+  function emptyStateMarkup(title, description, icon = '📭') {
+    return `
+      <div style="
+        padding: 48px 20px;
+        text-align: center;
+        background: rgba(255,255,255,0.02);
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 16px;
+        width: 100%;
+        box-sizing: border-box;
+        color: var(--text-muted);
+      ">
+        <div style="font-size: 44px; line-height: 1; margin-bottom: 14px;">${icon}</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px;">${escapeHtml(title)}</div>
+        <div style="font-size: 13px; line-height: 1.6; max-width: 260px; margin: 0 auto;">${escapeHtml(description)}</div>
+      </div>`;
+  }
+
+  function setPageEmpty(container, title, description, icon) {
+    if (!container) return;
+    container.innerHTML = emptyStateMarkup(title, description, icon);
+  }
+
+  // ============================================================
+  // MOVIE NORMALIZER
+  // ============================================================
+  function normalizeGenre(value) {
+    if (Array.isArray(value)) return value.map(v => String(v).toLowerCase().trim()).filter(Boolean);
+    if (!value) return [];
+    return String(value).split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+  }
+
+  function normalizeMovie(movie) {
+    const title = movie.title || movie.judul || movie.nama || 'Tanpa judul';
+    const genreRaw = movie.genreArray || movie.genre || movie.genres || movie.kategori || '';
+    const genreList = normalizeGenre(genreRaw);
+    const poster = movie.image || movie.poster || movie.gambar || movie.img || '';
+    const rating = movie.rating ?? movie.nilai ?? movie.score ?? '';
+    const duration = movie.duration || movie.durasi || movie.runtime || '';
+    const year = movie.year || movie.tahun || '';
+    const synopsis = movie.synopsis || movie.sinopsis || movie.description || '';
+
+    // ✅ FIXED: Support both old and new status fields
+    const isNowPlaying =
+      movie.is_now_playing === 1 || movie.is_now_playing === true ||
+      movie.now === true || movie.now === 1 ||
+      movie.status === 'now_playing' || movie.status === 'now' || movie.status === 'tayang';
+
+    const isComingSoon =
+      movie.is_coming_soon === 1 || movie.is_coming_soon === true ||
+      movie.coming === true || movie.coming === 1 ||
+      movie.status === 'coming_soon' || movie.status === 'coming' || movie.status === 'segera';
+
+    return {
+      ...movie,
+      id: movie.id ?? movie.movie_id ?? movie.film_id ?? title,
+      title, genreList, poster, rating, duration, year, synopsis,
+      isNowPlaying, isComingSoon
+    };
+  }
+
+  function normalizeCinema(cinema) {
+    const name = cinema.name || cinema.nama || cinema.cinema_name || 'Bioskop';
+    return {
+      ...cinema,
+      id: cinema.id ?? cinema.cinema_id ?? name,
+      name,
+      city: cinema.city || cinema.kota || cinema.location || '',
+      location: cinema.location || cinema.address || cinema.alamat || '',
+      distance: cinema.distance || cinema.jarak || ''
+    };
+  }
+
+  function normalizeShowtime(showtime) {
+    const time = showtime.show_time || showtime.time || showtime.jam || showtime.waktu || '';
+    const date = showtime.show_date || showtime.date || showtime.tanggal || '';
+    const cinemaId = showtime.cinema_id || showtime.bioskop_id || showtime.cinemaId || null;
+    const movieId = showtime.movie_id || showtime.film_id || showtime.movieId || null;
+    return {
+      ...showtime,
+      id: showtime.id ?? `${movieId}-${cinemaId}-${date}-${time}`,
+      movieId, cinemaId, date, time,
+      studio: showtime.studio_id || showtime.studio || showtime.room || 'Studio 1',
+      price: Number(showtime.price || showtime.harga || 50000),
+      isFull: showtime.full === true || showtime.full === 1 || showtime.status === 'full'
+    };
+  }
+
+  function normalizeNotification(notification) {
+    return {
+      ...notification,
+      id: notification.id ?? notification.notification_id ?? crypto.randomUUID(),
+      title: notification.title || notification.judul || 'Notifikasi',
+      message: notification.message || notification.pesan || '',
+      image: notification.image || notification.gambar || '',
+      createdAt: notification.created_at || notification.createdAt || new Date().toISOString(),
+      unread: notification.unread === true || notification.unread === 1 || notification.read === 0
+    };
+  }
+
+  // ============================================================
+  // DATA LOADERS
+  // ============================================================
+  async function loadMovies(force = false) {
+    if (!force && state.movies.length) return state.movies;
+    if (!state.moviesPromise || force) {
+      state.moviesPromise = requestJson(API.movies, []).then(data => safeArray(data).map(normalizeMovie));
+    }
+    state.movies = await state.moviesPromise;
+    return state.movies;
+  }
+
+  async function loadCinemas(force = false) {
+    if (!force && state.cinemas.length) return state.cinemas;
+    if (!state.cinemasPromise || force) {
+      state.cinemasPromise = requestJson(API.cinemas, []).then(data => safeArray(data).map(normalizeCinema));
+    }
+    state.cinemas = await state.cinemasPromise;
+    return state.cinemas;
+  }
+
+  async function loadShowtimes(force = false) {
+    if (!force && state.showtimes.length) return state.showtimes;
+    if (!state.showtimesPromise || force) {
+      state.showtimesPromise = requestJson(API.schedules, []).then(data => safeArray(data).map(normalizeShowtime));
+    }
+    state.showtimes = await state.showtimesPromise;
+    return state.showtimes;
+  }
+
+  async function loadPromos(force = false) {
+    if (!force && state.promos.length) return state.promos;
+    if (!state.promosPromise || force) {
+      state.promosPromise = requestJson(API.promos, []);
+    }
+    state.promos = await state.promosPromise;
+    return state.promos;
+  }
+
+  async function loadNotifications(force = false) {
+    if (!force && state.notifications.length) return state.notifications;
+    if (!state.notificationsPromise || force) {
+      state.notificationsPromise = requestJson(API.notifications, []).then(data => safeArray(data).map(normalizeNotification));
+    }
+    state.notifications = await state.notificationsPromise;
+    return state.notifications;
+  }
+
+  function loadStoredTickets() {
+    state.activeTickets = safeArray(getJSON(STORAGE_KEYS.ticketsActive, []));
+    state.historyTickets = safeArray(getJSON(STORAGE_KEYS.ticketsHistory, []));
+  }
+
+  // ============================================================
+  // FILTER HELPERS
+  // ============================================================
+  function matchesQuery(movie, query) {
+    if (!query) return true;
+    const haystack = [movie.title, movie.year, movie.duration, movie.rating, movie.genreList.join(' ')].join(' ').toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  }
+
+  function matchesGenre(movie, genre) {
+    if (!genre || genre === 'semua') return true;
+    return movie.genreList.some(g => g.includes(genre.toLowerCase()));
+  }
+
+  function filteredMovies(allMovies, overrideFilter = null) {
+    const query = (state.searchQuery || '').trim();
+    const filmFilter = overrideFilter || state.filmFilter || 'semua';
+    return allMovies.filter(movie => {
+      if (!matchesQuery(movie, query)) return false;
+      if (!matchesGenre(movie, state.genreFilter)) return false;
+      if (filmFilter === 'now_playing') return movie.isNowPlaying;
+      if (filmFilter === 'coming_soon') return movie.isComingSoon;
+      return true;
+    });
+  }
+
+  // ============================================================
+  // BADGE
+  // ============================================================
+  function setBadgeCount(count) {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    const n = Number(count || 0);
+    badge.textContent = String(n);
+    badge.style.display = n > 0 ? 'flex' : 'none';
+  }
+
+  function refreshNotifBadge() {
+    const unread = state.notifications.filter(n => n.unread).length;
+    setBadgeCount(unread);
+  }
+
+  // ============================================================
+  // MOVIE CARD
+  // ============================================================
+  function movieCardMarkup(movie) {
+    const ratingHtml = movie.rating
+      ? `⭐ ${escapeHtml(movie.rating)}`
+      : `<span style="color:var(--text-muted)">TBA</span>`;
+    const genreHtml = movie.genreList.length
+      ? movie.genreList.slice(0, 2).map(g => escapeHtml(toTitleCase(g))).join(' · ')
+      : 'Tanpa genre';
+    const tagHtml = movie.isNowPlaying
+      ? '<div class="now-tag">Tayang</div>'
+      : movie.isComingSoon ? '<div class="coming-tag">Soon</div>' : '';
+    const posterHtml = movie.poster
+      ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" class="movie-img" onerror="this.onerror=null;this.src='';this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:30px;\\'>🎬</div>'">`
+      : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:30px;">🎬</div>`;
+
+    return `
+      <div class="movie-card" role="button" tabindex="0" onclick="BE_TIX.openMovieDetail(${JSON.stringify(movie.id)})">
+        <div class="movie-poster">
+          ${tagHtml}
+          ${posterHtml}
+        </div>
+        <div class="movie-info">
+          <div class="movie-title" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
+          <div class="movie-genre">${genreHtml}</div>
+          <div class="movie-rating">${ratingHtml}</div>
+        </div>
+      </div>`;
+  }
+
+  function renderMovieSection(container, movies, emptyTitle, emptyDescription, emptyIcon) {
+    if (!container) return;
+    const list = safeArray(movies);
+    if (!list.length) {
+      setPageEmpty(container, emptyTitle, emptyDescription, emptyIcon);
+      return;
+    }
+    container.innerHTML = list.map(m => movieCardMarkup(m)).join('');
+  }
+
+  // ============================================================
+  // ✅ HERO CAROUSEL (3 films, prev/next, full ratio)
+  // ============================================================
+  function renderHeroCarousel(nowPlayingMovies) {
+    const hero = document.querySelector('.hero-banner');
+    if (!hero) return;
+
+    const films = nowPlayingMovies.slice(0, 5);
+
+    // ✅ FIXED: If no films, show proper empty state, NOT clickable
+    if (!films.length) {
+      hero.style.cursor = 'default';
+      hero.onclick = null;
+      hero.innerHTML = `
+        <div style="
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          text-align: center;
+          background: linear-gradient(135deg, rgba(22,22,58,0.96), rgba(10,10,26,0.96));
+          border-radius: inherit;
+        ">
+          <div>
+            <div style="font-size: 38px; margin-bottom: 10px;">🎬</div>
+            <div style="font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px;">Belum ada film unggulan</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">Admin belum menambahkan film tayang.</div>
+          </div>
+        </div>`;
+      return;
+    }
+
+    if (state.heroTimer) clearInterval(state.heroTimer);
+    if (state.heroIndex >= films.length) state.heroIndex = 0;
+
+    function renderSlide(idx) {
+      const movie = films[idx];
+      const total = films.length;
+
+      // For full-ratio poster display
+      const hasPoster = !!movie.poster;
+
+      hero.style.cursor = 'pointer';
+      hero.innerHTML = `
+        <div class="hero-slide" style="position:relative;width:100%;height:100%;overflow:hidden;border-radius:inherit;">
+          ${hasPoster
+            ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}"
+                 style="width:100%;height:100%;object-fit:cover;object-position:top center;display:block;"
+                 onerror="this.style.display='none';this.nextElementSibling.style.background='linear-gradient(135deg,#1a0a2e,#2d1b69)'">`
+            : ''
+          }
+          <div style="
+            position:absolute;inset:0;
+            background: linear-gradient(to top, rgba(10,10,26,0.95) 0%, rgba(10,10,26,0.4) 50%, transparent 100%);
+          "></div>
+
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 16px;">
+            <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:8px;">
+              <div style="flex:1;">
+                <div class="hero-tag">Sedang Tayang</div>
+                <h2 class="hero-title" style="margin-top:6px;">${escapeHtml(movie.title)}</h2>
+                <div class="hero-meta">
+                  <span class="hero-rating">⭐ ${escapeHtml(String(movie.rating || 'TBA'))}</span>
+                  <span>${escapeHtml(movie.genreList[0] ? toTitleCase(movie.genreList[0]) : 'Film')}</span>
+                  <span>${escapeHtml(movie.duration || '-')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <button class="hero-btn" onclick="event.stopPropagation();BE_TIX.openMovieDetail(${JSON.stringify(movie.id)})">🎟️ Beli Tiket</button>
+
+              ${total > 1 ? `
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="event.stopPropagation();BE_TIX.heroPrev()" style="
+                  background:rgba(255,255,255,0.15);border:none;color:#fff;
+                  width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;
+                  display:flex;align-items:center;justify-content:center;
+                ">‹</button>
+                <div style="display:flex;gap:5px;">
+                  ${films.map((_, i) => `
+                    <div style="
+                      width:${i === idx ? '16px' : '6px'};height:6px;border-radius:3px;
+                      background:${i === idx ? '#E63946' : 'rgba(255,255,255,0.35)'};
+                      transition:all 0.3s;cursor:pointer;
+                    " onclick="event.stopPropagation();BE_TIX.heroGoto(${i})"></div>
+                  `).join('')}
+                </div>
+                <button onclick="event.stopPropagation();BE_TIX.heroNext()" style="
+                  background:rgba(255,255,255,0.15);border:none;color:#fff;
+                  width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;
+                  display:flex;align-items:center;justify-content:center;
+                ">›</button>
+              </div>` : ''}
+            </div>
+          </div>
+        </div>`;
+
+      hero.onclick = (e) => {
+        if (e.target.closest('button')) return;
+        BE_TIX.openMovieDetail(movie.id);
+      };
+    }
+
+    renderSlide(state.heroIndex);
+
+    if (films.length > 1) {
+      state.heroTimer = setInterval(() => {
+        state.heroIndex = (state.heroIndex + 1) % films.length;
+        renderSlide(state.heroIndex);
+      }, 4500);
+    }
+
+    // Expose for buttons
+    window._heroFilms = films;
+    window._heroRenderSlide = renderSlide;
+  }
+
+  // ============================================================
+  // RENDER HOME
+  // ============================================================
+  function renderHeroAndSections() {
+    const allMovies = state.movies;
+    const nowPlaying = allMovies.filter(m => m.isNowPlaying);
+    const comingSoon = allMovies.filter(m => m.isComingSoon);
+
+    renderHeroCarousel(nowPlaying);
+
+    // Now Playing section
+    const npContainer = getContainer('now-playing');
+    const filteredNow = filteredMovies(nowPlaying, 'now_playing');
+    renderMovieSection(npContainer, filteredNow, 'Tidak ada film tayang', 'Admin belum menambahkan film tayang.', '🎬');
+
+    // Coming Soon section
+    const csContainer = getContainer('coming-soon');
+    const filteredComing = filteredMovies(comingSoon, 'coming_soon');
+    renderMovieSection(csContainer, filteredComing, 'Belum ada film segera hadir', 'Daftar film mendatang akan tampil di sini.', '⏳');
+
+    // All movies
+    renderAllMoviesPage();
+  }
+
+  function renderAllMoviesPage() {
+    const container = getContainer('all-movies', 'all-movies-list');
+    if (!container) return;
+    const query = (state.searchQuery || '').trim();
+    let filtered = filteredMovies(state.movies);
+
+    if (!filtered.length) {
+      setPageEmpty(container,
+        query ? 'Tidak ditemukan' : 'Belum ada film',
+        query ? `Tidak ada film yang cocok dengan "${query}".` : 'Film akan muncul setelah admin menambahkan data.',
+        query ? '🔎' : '🎞️'
+      );
+      return;
+    }
+    container.innerHTML = filtered.map(m => movieCardMarkup(m)).join('');
+  }
+
+  // ============================================================
+  // GENRE FILTER CHIPS (Film page)
+  // ============================================================
+  function renderGenreChips() {
+    const container = document.getElementById('genre-filters');
+    if (!container) return;
+
+    const chips = [{ label: 'Semua', value: 'semua' }, ...GENRES.map(g => ({ label: g, value: g.toLowerCase() }))];
+    container.innerHTML = chips.map(chip => `
+      <div class="filter-chip ${state.genreFilter === chip.value ? 'active' : ''}"
+           onclick="BE_TIX.setGenreFilter('${chip.value}', this)">
+        ${chip.label}
+      </div>`).join('');
+  }
+
+  // ============================================================
+  // CINEMA
+  // ============================================================
+  function renderCinemaSelectOptions(cinemas) {
+    const select = document.getElementById('kota-select');
+    if (!select) return;
+    if (!cinemas.length) {
+      select.innerHTML = `<option value="">Belum ada bioskop tersedia</option>`;
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    select.innerHTML = cinemas.map((c, i) =>
+      `<option value="${escapeHtml(String(c.id))}" ${i === 0 ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+    if (!state.selectedCinema) { state.selectedCinema = cinemas[0]; persistBookingState(); }
+  }
+
+  function renderBookingCinemaSelect(cinemas) {
+    const select = document.getElementById('booking-cinema');
+    if (!select) return;
+    if (!cinemas.length) {
+      select.innerHTML = `<option value="">Belum ada bioskop tersedia</option>`;
+      select.disabled = true;
+      state.selectedCinema = null;
+      persistBookingState();
+      return;
+    }
+    const current = state.selectedCinema ? String(state.selectedCinema.id) : '';
+    select.disabled = false;
+    select.innerHTML = cinemas.map(c =>
+      `<option value="${escapeHtml(String(c.id))}" ${current === String(c.id) ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+    if (!state.selectedCinema) { state.selectedCinema = cinemas[0]; persistBookingState(); }
+  }
+
+  function renderCinemaList(cinemas) {
+    const container = getContainer('bioskop-list');
+    if (!container) return;
+    if (!cinemas.length) {
+      setPageEmpty(container, 'Belum ada bioskop', 'Admin belum menambahkan bioskop apa pun.', '📍');
+      return;
+    }
+    container.innerHTML = cinemas.map(c => `
+      <div class="bioskop-card" role="button" tabindex="0">
+        <div class="bioskop-icon">🎞️</div>
+        <div>
+          <div class="bioskop-name">${escapeHtml(c.name)}</div>
+          <div class="bioskop-location">${escapeHtml(c.city || c.location || 'Alamat belum tersedia')}</div>
+        </div>
+        <div class="bioskop-dist">${escapeHtml(c.distance || '')}</div>
+      </div>`).join('');
+  }
+
+  // ============================================================
+  // SHOWTIMES
+  // ============================================================
+  function getShowtimesForSelected() {
+    const movie = state.selectedMovie;
+    const cinema = state.selectedCinema;
+    const date = state.selectedDate;
+    let items = state.showtimes.slice();
+    if (movie) items = items.filter(s => String(s.movieId) === String(movie.id));
+    if (cinema) items = items.filter(s => String(s.cinemaId) === String(cinema.id));
+    if (date) items = items.filter(s => String(s.date) === String(date));
+    return items;
+  }
+
+  function renderShowtimeList(items) {
+    const container = document.getElementById('showtime-list');
+    if (!container) return;
+    if (!items.length) {
+      setPageEmpty(container, 'Belum ada jadwal tayang', 'Jadwal akan tampil setelah admin menambahkan data.', '🕒');
+      return;
+    }
+    container.innerHTML = items.map(showtime => `
+      <div class="showtime-card">
+        <div class="showtime-cinema">${escapeHtml(String(showtime.studio || 'Studio'))}</div>
+        <div class="showtime-times">
+          <button type="button"
+            class="time-chip ${state.selectedShowtime && String(state.selectedShowtime.id) === String(showtime.id) ? 'selected' : ''} ${showtime.isFull ? 'full' : ''}"
+            ${showtime.isFull ? 'disabled' : ''}
+            onclick="BE_TIX.selectShowtime(${JSON.stringify(showtime.id)})">
+            ${escapeHtml(showtime.time || '-')}
+          </button>
+          <span style="color:var(--text-muted);font-size:11px;align-self:center;">${formatCurrency(showtime.price || 0)}</span>
+        </div>
+      </div>`).join('');
+  }
+
+  // ============================================================
+  // DATE PICKER
+  // ============================================================
+  function renderDatePickerBase() {
+    const container = document.getElementById('date-picker');
+    if (!container) return;
+    const today = new Date();
+    const selected = state.selectedDate;
+    const chips = Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + idx);
+      const iso = d.toISOString().slice(0, 10);
+      const active = selected ? String(selected) === String(iso) : idx === 0;
+      if (!state.selectedDate && idx === 0) state.selectedDate = iso;
+      return `
+        <button type="button" class="date-chip ${active ? 'active' : ''}" onclick="BE_TIX.selectDate('${iso}')">
+          <div class="date-day">${d.getDate()}</div>
+          <div class="date-label">${escapeHtml(formatDateShort(d))}</div>
+        </button>`;
+    });
+    container.innerHTML = chips.join('');
+  }
+
+  // ============================================================
+  // SEAT GRID
+  // ============================================================
+  function updateSeatSummary(activeShowtime = null) {
+    const countEl = document.getElementById('selected-count');
+    const totalEl = document.getElementById('total-price');
+    if (!countEl || !totalEl) return;
+    const count = safeArray(state.selectedSeats).length;
+    const basePrice = activeShowtime ? Number(activeShowtime.price || 50000) : 50000;
+    countEl.textContent = String(count);
+    totalEl.textContent = formatCurrency(count * basePrice);
+  }
+
+  function renderSeatGridBase() {
+    const container = getContainer('seat-grid');
+    if (!container) return;
+    const activeShowtime = state.selectedShowtime || getShowtimesForSelected()[0] || null;
+    if (!activeShowtime) {
+      setPageEmpty(container, 'Pilih jadwal dulu', 'Setelah jadwal dipilih, grid kursi akan muncul di sini.', '🪑');
+      updateSeatSummary();
+      return;
+    }
+    const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const cols = [1, 2, 3, 4, 5, 6, 7, 8];
+    const takenSeats = new Set(['A1', 'A2', 'B4', 'C6', 'D1', 'E8', 'F3']);
+    const vipRows = new Set(['A', 'B']);
+    const selectedSeats = new Set(safeArray(state.selectedSeats));
+
+    container.innerHTML = rows.map(row => {
+      const seats = cols.map(col => {
+        const code = `${row}${col}`;
+        const isTaken = takenSeats.has(code);
+        const isVip = vipRows.has(row);
+        const isSelected = selectedSeats.has(code);
+        const classes = ['seat', isTaken ? 'taken' : 'available', isVip ? 'vip' : '', isSelected ? 'selected' : ''].filter(Boolean);
+        return `<button type="button" class="${classes.join(' ')}" title="${code}" aria-label="Kursi ${code}"
+          ${isTaken ? 'disabled' : ''} onclick="BE_TIX.toggleSeat('${code}')"></button>`;
+      }).join('');
+      return `<div class="seat-row"><div class="row-label">${row}</div>${seats}</div>`;
+    }).join('');
+
+    // Update booking info bar
+    const infoBar = document.querySelector('.booking-info-bar');
+    if (infoBar) {
+      const movie = state.selectedMovie;
+      const cinema = state.selectedCinema;
+      const info = [movie?.title, cinema?.name, activeShowtime.date, activeShowtime.time].filter(Boolean).join(' · ');
+      infoBar.textContent = info || 'Pilih film, jadwal, dan bioskop terlebih dahulu';
+    }
+
+    updateSeatSummary(activeShowtime);
+  }
+
+  // ============================================================
+  // PAYMENT METHODS
+  // ============================================================
+  function renderPayMethodsBase() {
+    const container = document.getElementById('pay-methods');
+    if (!container) return;
+    const methods = [
+      { id: 'qris', name: 'QRIS', desc: 'Scan dan bayar cepat', icon: '⬛' },
+      { id: 'dana', name: 'DANA', desc: 'Dompet digital', icon: '💙' },
+      { id: 'ovo', name: 'OVO', desc: 'Pembayaran instan', icon: '🟣' },
+      { id: 'bca', name: 'BCA Virtual Account', desc: 'Transfer via VA', icon: '🏦' }
+    ];
+    container.innerHTML = methods.map(method => `
+      <div class="pay-method ${state.selectedPayment === method.id ? 'selected' : ''}"
+           role="button" tabindex="0" onclick="BE_TIX.selectPayment('${method.id}')">
+        <div class="pay-logo">${method.icon}</div>
+        <div>
+          <div class="pay-name">${escapeHtml(method.name)}</div>
+          <div class="pay-desc">${escapeHtml(method.desc)}</div>
+        </div>
+        <div class="pay-check">✓</div>
+      </div>`).join('');
+  }
+
+  // ============================================================
+  // TICKETS / E-TICKET
+  // ============================================================
+  function makeTicketCard(ticket) {
+    const title = ticket.title || ticket.movieTitle || 'Tiket';
+    const cinema = ticket.cinema || ticket.bioskop || 'Bioskop';
+    const seats = Array.isArray(ticket.seats) ? ticket.seats.join(', ') : (ticket.seats || '-');
+    const date = ticket.date || ticket.showDate || ticket.created_at || '';
+    const status = ticket.status || ticket.payment_status || 'Selesai';
+    const statusClass = /batal/i.test(String(status)) ? 'dibatalkan' : 'selesai';
+    return `
+      <div class="ticket-card">
+        <div class="ticket-header">
+          <div class="ticket-poster">🎬</div>
+          <div>
+            <div class="ticket-movie-title">${escapeHtml(title)}</div>
+            <div class="ticket-detail">${escapeHtml(cinema)}</div>
+            <div class="ticket-detail">${escapeHtml(date ? formatDateLong(new Date(date)) : 'Tanpa jadwal')}</div>
+          </div>
+        </div>
+        <div class="ticket-body">
+          <div class="ticket-row"><span class="ticket-key">Kursi</span><span class="ticket-val">${escapeHtml(seats)}</span></div>
+          <div class="ticket-row no-border"><span class="ticket-key">Status</span><span class="riwayat-status ${statusClass}">${escapeHtml(status)}</span></div>
+        </div>
+      </div>`;
+  }
+
+  function renderTicketLists() {
+    const activeContainer = document.getElementById('etiket-list');
+    const historyContainer = document.getElementById('riwayat-list');
+    const active = safeArray(state.activeTickets);
+    const history = safeArray(state.historyTickets);
+    if (activeContainer) {
+      activeContainer.innerHTML = active.length
+        ? active.map(t => makeTicketCard(t)).join('')
+        : emptyStateMarkup('Belum ada tiket aktif', 'Tiket aktif akan muncul setelah transaksi berhasil.', '🎟️');
+    }
+    if (historyContainer) {
+      historyContainer.innerHTML = history.length
+        ? history.map(t => makeTicketCard(t)).join('')
+        : emptyStateMarkup('Belum ada riwayat', 'Riwayat transaksi akan muncul setelah ada pembelian tiket.', '📄');
+    }
+  }
+
+  // ============================================================
+  // PROMOS
+  // ============================================================
+  function renderPromoList(promos) {
+    const promoContainer = document.getElementById('promo-list');
+    const voucherContainer = document.getElementById('voucher-list');
+    if (promoContainer) {
+      promoContainer.innerHTML = promos.length
+        ? promos.slice(0, 6).map(p => `
+            <div class="promo-card">
+              <div class="promo-badge">${escapeHtml(p.badge || p.title || 'PROMO')}</div>
+              <div class="promo-title">${escapeHtml(p.title || '-')}</div>
+              <div class="promo-desc">${escapeHtml(p.description || p.synopsis || '')}</div>
+            </div>`).join('')
+        : emptyStateMarkup('Belum ada promo', 'Promo akan muncul ketika tersedia.', '🎉');
+    }
+    if (voucherContainer) {
+      voucherContainer.innerHTML = promos.length
+        ? promos.slice(0, 4).map(p => `
+            <div class="voucher-card">
+              <div>
+                <div class="voucher-code">${escapeHtml(p.code || p.title || 'VOUCHER')}</div>
+                <div class="voucher-info">${escapeHtml(p.description || p.synopsis || '')}</div>
+              </div>
+              <button type="button" class="use-btn">Pakai</button>
+            </div>`).join('')
+        : emptyStateMarkup('Belum ada voucher', 'Voucher dan cashback akan tampil di sini.', '🏷️');
+    }
+  }
+
+  // ============================================================
+  // ✅ NOTIFICATIONS (badge clears on open)
+  // ============================================================
+  function renderNotificationList(notifications) {
+    const container = document.getElementById('notif-list');
+    if (!container) return;
+    if (!notifications.length) {
+      setPageEmpty(container, 'Belum ada notifikasi', 'Notifikasi admin akan tampil di sini setelah tersedia.', '🔔');
+      setBadgeCount(0);
+      return;
+    }
+    const unreadCount = notifications.filter(n => n.unread).length;
+    setBadgeCount(unreadCount);
+    container.innerHTML = notifications.map(notif => `
+      <div class="notif-card ${notif.unread ? 'unread' : ''}">
+        ${notif.unread ? '<div class="notif-dot"></div>' : '<div style="width:8px;height:8px;"></div>'}
+        <div class="notif-icon">${escapeHtml(notif.image ? '🖼️' : '🔔')}</div>
+        <div style="flex:1;">
+          <div class="notif-title">${escapeHtml(notif.title)}</div>
+          <div class="notif-desc">${escapeHtml(notif.message)}</div>
+          <div class="notif-time">${escapeHtml(new Date(notif.createdAt).toLocaleString('id-ID'))}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Mark all as read when user opens notif page
+  async function markNotificationsRead() {
+    state.notifications = state.notifications.map(n => ({ ...n, unread: false }));
+    setBadgeCount(0);
+    try {
+      await fetch('/api/notifications/mark-read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_role: 'user' })
+      });
+    } catch (e) { /* silently fail */ }
+  }
+
+  // ============================================================
+  // MOVIE DETAIL
+  // ============================================================
+  function renderMovieDetail(movie) {
+    const normalized = movie ? normalizeMovie(movie) : null;
+    if (!normalized) return;
+    state.selectedMovie = normalized;
+    persistBookingState();
+
+    const poster = document.getElementById('detail-poster');
+    const title = document.getElementById('detail-title');
+    const tags = document.getElementById('detail-tags');
+    const meta = document.getElementById('detail-meta');
+    const rating = document.getElementById('detail-rating');
+    const synopsis = document.getElementById('synopsis-text');
+
+    if (poster) {
+      if (normalized.poster) {
+        poster.style.backgroundImage = `url('${escapeHtml(normalized.poster)}')`;
+        poster.style.backgroundSize = 'cover';
+        poster.style.backgroundPosition = 'top center';
+        poster.textContent = '';
+      } else {
+        poster.textContent = '🎬';
+        poster.style.backgroundImage = '';
+      }
+    }
+    if (title) title.textContent = normalized.title;
+    if (tags) {
+      tags.innerHTML = normalized.genreList.length
+        ? normalized.genreList.map(g => `<span class="tag">${escapeHtml(toTitleCase(g))}</span>`).join('')
+        : '<span class="tag">Tanpa Genre</span>';
+    }
+    if (meta) meta.textContent = [normalized.year || '', normalized.duration || ''].filter(Boolean).join(' · ');
+    if (rating) rating.textContent = normalized.rating ? `⭐ ${normalized.rating}` : 'TBA';
+    if (synopsis) {
+      synopsis.textContent = normalized.synopsis || 'Sinopsis belum tersedia.';
+    }
+  }
+
+  // ============================================================
+  // BOOKING STATE PERSISTENCE
+  // ============================================================
+  function persistBookingState() {
+    setJSON(STORAGE_KEYS.selectedMovie, state.selectedMovie);
+    setJSON(STORAGE_KEYS.selectedCinema, state.selectedCinema);
+    setJSON(STORAGE_KEYS.selectedDate, state.selectedDate);
+    setJSON(STORAGE_KEYS.selectedShowtime, state.selectedShowtime);
+    setJSON(STORAGE_KEYS.selectedPayment, state.selectedPayment);
+    setJSON(STORAGE_KEYS.selectedSeats, state.selectedSeats);
+  }
+
+  function restoreBookingState() {
+    const raw = getJSON(STORAGE_KEYS.selectedMovie, null);
+    state.selectedMovie = raw ? normalizeMovie(raw) : null;
+    state.selectedCinema = getJSON(STORAGE_KEYS.selectedCinema, null);
+    state.selectedDate = getJSON(STORAGE_KEYS.selectedDate, null);
+    state.selectedShowtime = getJSON(STORAGE_KEYS.selectedShowtime, null);
+    state.selectedPayment = getJSON(STORAGE_KEYS.selectedPayment, null);
+    state.selectedSeats = getJSON(STORAGE_KEYS.selectedSeats, []);
+    state.searchQuery = getJSON(STORAGE_KEYS.searchQuery, '');
+    state.genreFilter = getJSON(STORAGE_KEYS.genre, 'semua') || 'semua';
+    state.filmFilter = getJSON(STORAGE_KEYS.filmFilter, 'semua') || 'semua';
+  }
+
+  // ============================================================
+  // PUBLIC ACTIONS
+  // ============================================================
+  async function initialize() {
+    restoreBookingState();
+    loadStoredTickets();
+
+    // Search input
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.value = state.searchQuery || '';
+      searchInput.addEventListener('input', e => {
+        state.searchQuery = e.target.value || '';
+        setJSON(STORAGE_KEYS.searchQuery, state.searchQuery);
+        // ✅ FIXED: Navigate to film page on search
+        if (state.searchQuery.trim()) {
+          if (typeof navigateTo === 'function') navigateTo('film');
+        }
+        renderAllMoviesPage();
+        renderHeroAndSections();
+      });
+    }
+
+    const bookingCinema = document.getElementById('booking-cinema');
+    if (bookingCinema) {
+      bookingCinema.addEventListener('change', e => {
+        const selected = state.cinemas.find(c => String(c.id) === String(e.target.value));
+        state.selectedCinema = selected || null;
+        state.selectedShowtime = null;
+        state.selectedSeats = [];
+        persistBookingState();
+        renderShowtimeList(getShowtimesForSelected());
+        renderSeatGridBase();
+      });
+    }
+
+    const kotaSelect = document.getElementById('kota-select');
+    if (kotaSelect) {
+      kotaSelect.addEventListener('change', e => {
+        const selected = state.cinemas.find(c => String(c.id) === String(e.target.value));
+        state.selectedCinema = selected || null;
+        persistBookingState();
+        renderShowtimeList(getShowtimesForSelected());
+      });
+    }
+
+    const [movies, cinemas, showtimes, promos, notifications] = await Promise.all([
+      loadMovies(),
+      loadCinemas(),
+      loadShowtimes(),
+      loadPromos(),
+      loadNotifications()
+    ]);
+
+    renderGenreChips();
+    renderCinemaSelectOptions(cinemas);
+    renderBookingCinemaSelect(cinemas);
+    renderCinemaList(cinemas);
+    renderDatePickerBase();
+    renderShowtimeList(getShowtimesForSelected());
+    renderSeatGridBase();
+    renderPayMethodsBase();
+    renderPromoList(promos);
+    renderNotificationList(notifications);
+    renderTicketLists();
+    renderHeroAndSections();
+
+    if (!state.selectedMovie && movies.length) {
+      const firstNow = movies.find(m => m.isNowPlaying) || movies[0];
+      state.selectedMovie = firstNow;
+      persistBookingState();
+      renderMovieDetail(firstNow);
+    }
+
+    refreshNotifBadge();
+
+    // AI text
+    const aiText = document.getElementById('ai-text');
+    if (aiText && movies.length) {
+      const now = movies.filter(m => m.isNowPlaying);
+      aiText.textContent = now.length
+        ? `${now[0].title} sedang tayang! ${now.length > 1 ? `Dan ${now.length - 1} film lainnya.` : ''}`
+        : 'Selamat datang di BE TIX! Silakan tunggu admin menambahkan data film.';
+    }
+  }
+
+  async function openMovieDetail(movieId) {
+    if (!state.movies.length) await loadMovies();
+    const movie = state.movies.find(m => String(m.id) === String(movieId)) || null;
+    if (movie) renderMovieDetail(movie);
+    if (typeof navigateTo === 'function') navigateTo('film-detail');
+  }
+
+  function selectDate(isoDate) {
+    state.selectedDate = isoDate;
+    persistBookingState();
+    renderDatePickerBase();
+    renderShowtimeList(getShowtimesForSelected());
+    renderSeatGridBase();
+  }
+
+  function selectShowtime(showtimeId) {
+    const showtime = state.showtimes.find(s => String(s.id) === String(showtimeId));
+    if (!showtime || showtime.isFull) return;
+    state.selectedShowtime = showtime;
+    state.selectedSeats = [];
+    persistBookingState();
+    renderShowtimeList(getShowtimesForSelected());
+    renderSeatGridBase();
+  }
+
+  function selectPayment(methodId) {
+    state.selectedPayment = methodId;
+    persistBookingState();
+    renderPayMethodsBase();
+  }
+
+  function toggleSeat(code) {
+    const exists = state.selectedSeats.includes(code);
+    state.selectedSeats = exists
+      ? state.selectedSeats.filter(s => s !== code)
+      : [...state.selectedSeats, code];
+    persistBookingState();
+    renderSeatGridBase();
+  }
+
+  // ✅ HERO CONTROLS
+  function heroPrev() {
+    const films = window._heroFilms || [];
+    if (!films.length) return;
+    state.heroIndex = (state.heroIndex - 1 + films.length) % films.length;
+    if (state.heroTimer) clearInterval(state.heroTimer);
+    if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+    if (films.length > 1) {
+      state.heroTimer = setInterval(() => {
+        state.heroIndex = (state.heroIndex + 1) % films.length;
+        if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+      }, 4500);
+    }
+  }
+
+  function heroNext() {
+    const films = window._heroFilms || [];
+    if (!films.length) return;
+    state.heroIndex = (state.heroIndex + 1) % films.length;
+    if (state.heroTimer) clearInterval(state.heroTimer);
+    if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+    if (films.length > 1) {
+      state.heroTimer = setInterval(() => {
+        state.heroIndex = (state.heroIndex + 1) % films.length;
+        if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+      }, 4500);
+    }
+  }
+
+  function heroGoto(idx) {
+    const films = window._heroFilms || [];
+    if (!films.length) return;
+    state.heroIndex = idx;
+    if (state.heroTimer) clearInterval(state.heroTimer);
+    if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+    if (films.length > 1) {
+      state.heroTimer = setInterval(() => {
+        state.heroIndex = (state.heroIndex + 1) % films.length;
+        if (window._heroRenderSlide) window._heroRenderSlide(state.heroIndex);
+      }, 4500);
+    }
+  }
+
+  // ✅ FIXED: filterGenre supports film type context
+  async function setGenreFilter(genre, el) {
+    state.genreFilter = genre || 'semua';
+    setJSON(STORAGE_KEYS.genre, state.genreFilter);
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    if (el && el.classList) el.classList.add('active');
+    renderAllMoviesPage();
+  }
+
+  // ✅ FIXED: "Lihat Semua" now differentiates between now/coming
+  function viewAllFilms(type = 'semua') {
+    state.filmFilter = type;
+    setJSON(STORAGE_KEYS.filmFilter, type);
+    if (typeof navigateTo === 'function') navigateTo('film');
+    renderAllMoviesPage();
+    // Update active filter chip if any
+    updateFilmTypeChips(type);
+  }
+
+  function updateFilmTypeChips(type) {
+    const nowBtn = document.getElementById('chip-now-playing');
+    const comingBtn = document.getElementById('chip-coming-soon');
+    const semuaBtn = document.getElementById('chip-semua');
+    [nowBtn, comingBtn, semuaBtn].forEach(b => b && b.classList.remove('active'));
+    if (type === 'now_playing' && nowBtn) nowBtn.classList.add('active');
+    else if (type === 'coming_soon' && comingBtn) comingBtn.classList.add('active');
+    else if (semuaBtn) semuaBtn.classList.add('active');
+  }
+
+  async function loadBioskop() {
+    const cinemas = await loadCinemas();
+    renderCinemaSelectOptions(cinemas);
+    renderBookingCinemaSelect(cinemas);
+    renderCinemaList(cinemas);
+  }
+
+  async function renderNowPlaying() {
+    const container = getContainer('now-playing');
+    if (!container) return;
+    const movies = await loadMovies();
+    const filtered = movies.filter(m => m.isNowPlaying);
+    renderMovieSection(container, filtered, 'Tidak ada film tayang', 'Film akan tampil setelah admin menambahkan data.', '🎬');
+    renderHeroCarousel(filtered);
+  }
+
+  async function renderComingSoon() {
+    const container = getContainer('coming-soon');
+    if (!container) return;
+    const movies = await loadMovies();
+    const filtered = movies.filter(m => m.isComingSoon);
+    renderMovieSection(container, filtered, 'Belum ada film segera hadir', 'Daftar film mendatang akan tampil di sini.', '⏳');
+  }
+
+  async function renderAllMovies() {
+    const movies = await loadMovies();
+    state.movies = movies;
+    renderAllMoviesPage();
+  }
+
+  async function renderDatePicker() { renderDatePickerBase(); }
+  async function renderShowtimes() { renderShowtimeList(getShowtimesForSelected()); }
+  async function renderSeatGrid() { renderSeatGridBase(); }
+  async function renderPayMethods() { renderPayMethodsBase(); }
+  async function renderEtiket() { loadStoredTickets(); renderTicketLists(); }
+  async function renderRiwayat() { loadStoredTickets(); renderTicketLists(); }
+
+  async function renderPromos() {
+    const promos = await loadPromos();
+    renderPromoList(promos);
+  }
+
+  // ✅ FIXED: Mark as read when user opens notif page
+  async function renderNotifications() {
+    const notifications = await loadNotifications();
+    renderNotificationList(notifications);
+    await markNotificationsRead();
+  }
+
+  async function loadAIRecommendation() {
+    const aiText = document.getElementById('ai-text');
+    if (!aiText) return;
+    const movies = await loadMovies();
+    const now = movies.filter(m => m.isNowPlaying);
+    if (!movies.length) {
+      aiText.textContent = 'Selamat datang di BE TIX! Silakan tunggu admin menambahkan data film.';
+      return;
+    }
+    aiText.textContent = now.length
+      ? `${now[0].title} sedang tayang${now.length > 1 ? ` dan ${now.length - 1} film lainnya!` : '!'}`
+      : `Cek film ${movies[0].title} yang akan segera tayang!`;
+  }
+
+  async function processPayment() {
+    const showtime = state.selectedShowtime || getShowtimesForSelected()[0] || null;
+    const cinema = state.selectedCinema || (state.cinemas.length && state.cinemas[0]) || null;
+    const movie = state.selectedMovie || (state.movies.length && state.movies[0]) || null;
+
+    if (!movie) { alert('Pilih film terlebih dahulu.'); return; }
+    if (!cinema) { alert('Belum ada bioskop yang dipilih.'); return; }
+    if (!showtime) { alert('Pilih jadwal tayang terlebih dahulu.'); return; }
+    if (!safeArray(state.selectedSeats).length) { alert('Pilih minimal satu kursi.'); return; }
+    if (!state.selectedPayment) { alert('Pilih metode pembayaran terlebih dahulu.'); return; }
+
+    const total = safeArray(state.selectedSeats).length * Number(showtime.price || 50000);
+    const ticket = {
+      id: `TIX-${Date.now()}`,
+      title: movie.title, movieTitle: movie.title,
+      cinema: cinema.name,
+      seats: state.selectedSeats.slice(),
+      date: showtime.date || state.selectedDate || new Date().toISOString().slice(0, 10),
+      showTime: showtime.time, status: 'Aktif', total,
+      paymentMethod: state.selectedPayment,
+      created_at: new Date().toISOString()
+    };
+
+    const active = safeArray(getJSON(STORAGE_KEYS.ticketsActive, []));
+    active.unshift(ticket);
+    setJSON(STORAGE_KEYS.ticketsActive, active);
+
+    const history = safeArray(getJSON(STORAGE_KEYS.ticketsHistory, []));
+    history.unshift({ ...ticket, status: 'Selesai' });
+    setJSON(STORAGE_KEYS.ticketsHistory, history);
+
+    state.activeTickets = active;
+    state.historyTickets = history;
+    state.selectedSeats = [];
+    persistBookingState();
+
+    renderTicketLists();
+    renderSeatGridBase();
+    renderPayMethodsBase();
+
+    const modal = document.getElementById('success-modal') || document.querySelector('.success-modal');
+    if (modal) modal.classList.add('is-open');
+    if (typeof navigateTo === 'function') navigateTo('etiket');
+  }
+
+  // ============================================================
+  // DOM LIFECYCLE
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', () => {
+    initialize().catch(err => console.error('Render init gagal:', err));
+  });
+
+  // ============================================================
+  // EXPOSE
+  // ============================================================
+  window.BE_TIX = {
+    openMovieDetail,
+    selectDate, selectShowtime, selectPayment, toggleSeat,
+    processPayment,
+    setGenreFilter,
+    viewAllFilms,
+    heroPrev, heroNext, heroGoto,
+    loadBioskop,
+    renderNowPlaying, renderComingSoon, renderAllMovies,
+    renderDatePicker, renderShowtimes, renderSeatGrid,
+    renderPayMethods, renderEtiket, renderRiwayat,
+    renderPromos, renderNotifications, loadAIRecommendation,
+    state
+  };
+
+  // Backwards compat
+  window.filterGenre = (genre, el) => BE_TIX.setGenreFilter(genre, el);
+  window.processPayment = processPayment;
+  window.getMovies = loadMovies;
+  window.renderNowPlaying = renderNowPlaying;
+  window.renderComingSoon = renderComingSoon;
+  window.renderAllMovies = renderAllMovies;
+  window.loadBioskop = loadBioskop;
+  window.renderDatePicker = renderDatePickerBase;
+  window.renderShowtimes = () => renderShowtimeList(getShowtimesForSelected());
+  window.renderSeatGrid = renderSeatGridBase;
+  window.renderPayMethods = renderPayMethodsBase;
+  window.renderEtiket = () => { loadStoredTickets(); renderTicketLists(); };
+  window.renderRiwayat = () => { loadStoredTickets(); renderTicketLists(); };
+  window.renderPromos = renderPromos;
+  window.renderNotifications = renderNotifications;
+  window.loadAIRecommendation = loadAIRecommendation;
+})();
+
+

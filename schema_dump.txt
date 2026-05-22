@@ -1,0 +1,88 @@
+
+-- Struktur tabel: cinemas
+id	int	NO	PRI	null	auto_increment
+name	varchar(100)	NO		null	
+city	varchar(100)	YES		null	
+location	varchar(150)	NO		null	
+created_at	timestamp	YES		CURRENT_TIMESTAMP	DEFAULT_GENERATED
+Rows: 1
+
+-- Struktur tabel: movies
+id	int	NO	PRI	null	auto_increment
+title	varchar(150)	NO		null	
+duration	varchar(6)	YES		null	
+genre	varchar(50)	NO		null	
+poster	varchar(255)	YES		null	
+rating	decimal(2,1)	YES		null	
+is_now_playing	tinyint(1)	YES		0	
+is_coming_soon	tinyint(1)	YES		0	
+created_at	timestamp	YES		CURRENT_TIMESTAMP	DEFAULT_GENERATED
+year	int	YES		null	
+Rows: 2
+
+-- Struktur tabel: notifications
+id	int	NO	PRI	null	auto_increment
+title	varchar(150)	NO		null	
+message	text	NO		null	
+image	varchar(255)	YES		null	
+target_role	varchar(20)	NO		user	
+unread	tinyint(1)	NO		1	
+created_at	timestamp	NO		CURRENT_TIMESTAMP	DEFAULT_GENERATED
+Rows: 1
+
+-- Struktur tabel: schedules
+id	int	NO	PRI	null	auto_increment
+movie_id	int	NO	MUL	null	
+studio_id	int	NO	MUL	null	
+show_date	date	NO		null	
+show_time	time	NO		null	
+price	int	YES		35000	
+cinema_id	int	YES		null	
+Rows: 1
+
+-- Struktur tabel: seats
+id	int	NO	PRI	null	auto_increment
+studio_id	int	NO	MUL	null	
+seat_number	varchar(10)	NO		null	
+Rows: 0
+
+-- Struktur tabel: studios
+id	int	NO	PRI	null	auto_increment
+cinema_id	int	NO	MUL	null	
+name	varchar(50)	YES		null	
+seat_capacity	int	YES		40	
+Rows: 1
+
+-- Struktur tabel: tickets
+id	int	NO	PRI	null	auto_increment
+transaction_id	int	NO	MUL	null	
+schedule_id	int	NO	MUL	null	
+seat_code	varchar(10)	YES		null	
+qr_code	text	YES		null	
+status	enum('active','used','cancelled')	YES		active	
+Rows: 0
+
+-- Struktur tabel: transaction_details
+id	int	NO	PRI	null	auto_increment
+transaction_id	int	NO	MUL	null	
+ticket_id	int	NO	UNI	null	
+Rows: 0
+
+-- Struktur tabel: transactions
+id	int	NO	PRI	null	auto_increment
+user_id	int	NO	MUL	null	
+total_price	int	NO		null	
+payment_method	varchar(50)	YES		null	
+payment_status	enum('pending','paid','cancelled')	YES		pending	
+created_at	timestamp	YES		CURRENT_TIMESTAMP	DEFAULT_GENERATED
+Rows: 0
+
+-- Struktur tabel: users
+id	int	NO	PRI	null	auto_increment
+name	varchar(100)	YES		null	
+email	varchar(100)	YES	UNI	null	
+password	varchar(255)	YES		null	
+role	enum('admin','user')	YES		user	
+points	int	YES		0	
+created_at	timestamp	YES		CURRENT_TIMESTAMP	DEFAULT_GENERATED
+Rows: 2

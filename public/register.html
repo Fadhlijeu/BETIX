@@ -1,59 +1,302 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <title>Register</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BE TIX - Daftar Akun</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: radial-gradient(circle at top right, var(--navy-light), var(--navy));
+    }
+    .auth-card {
+      background: var(--surface);
+      width: 100%;
+      max-width: 450px;
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .auth-logo {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--text);
+      text-align: center;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    .auth-logo span { color: var(--red); }
+    .role-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 22px;
+      background: var(--navy-mid);
+      padding: 5px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .role-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .role-btn.active {
+      background: var(--surface2);
+      color: var(--red);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .full-width { grid-column: span 2; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+    .form-input:focus { border-color: var(--red); }
+    #admin-pass-field {
+      background: rgba(255, 183, 3, 0.05);
+      border: 1px dashed var(--gold);
+      padding: 15px;
+      border-radius: var(--radius);
+      margin-bottom: 15px;
+      display: none;
+    }
+    .btn-auth {
+      width: 100%;
+      background: var(--red);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .auth-footer a {
+      color: var(--red);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .error-msg {
+      background: rgba(230, 57, 70, 0.1);
+      color: var(--red);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .success-msg {
+      background: rgba(0, 180, 100, 0.12);
+      color: #7bf2b5;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    @media (max-width: 560px) {
+      .auth-card { padding: 26px 20px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .full-width { grid-column: span 1; }
+    }
+  </style>
 </head>
 <body>
 
-<h1>Register User</h1>
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-logo">BE<span>TIX</span></div>
 
-<input type="text" id="nama" placeholder="Nama">
-<br><br>
+    <div id="error-box" class="error-msg"></div>
+    <div id="success-box" class="success-msg"></div>
 
-<input type="email" id="email" placeholder="Email">
-<br><br>
+    <div class="role-selector">
+      <button class="role-btn active" type="button" onclick="setRole('user', this)">User Biasa</button>
+      <button class="role-btn" type="button" onclick="setRole('admin', this)">Admin</button>
+    </div>
 
-<input type="password" id="password" placeholder="Password">
-<br><br>
+    <form id="register-form">
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Nama Lengkap</label>
+          <input type="text" id="name" name="name" class="form-input" placeholder="Contoh: Budi Santoso" required>
+        </div>
 
-<button onclick="register()">Register</button>
+        <div class="form-group full-width">
+          <label>Email</label>
+          <input type="email" id="email" class="form-input" placeholder="email@domain.com" required>
+        </div>
+
+        <div class="form-group">
+          <label>Kata Sandi</label>
+          <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+        </div>
+
+        <div class="form-group">
+          <label>Konfirmasi Sandi</label>
+          <input type="password" id="confirm_password" class="form-input" placeholder="••••••••" required>
+        </div>
+      </div>
+
+      <div id="admin-pass-field">
+        <label style="color: var(--gold)">Admin Passcode</label>
+        <input type="password" id="admin_passcode" class="form-input" style="border-color: var(--gold-dark)" placeholder="Masukkan kode otorisasi">
+        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Hanya untuk staff berwenang.</small>
+      </div>
+
+      <input type="hidden" id="role" value="user">
+      <button type="submit" class="btn-auth">Buat Akun</button>
+    </form>
+
+    <div class="auth-footer">
+      Sudah punya akun? <a href="/login.html">Masuk di sini</a>
+    </div>
+  </div>
+</div>
 
 <script>
+  const SESSION_KEY = 'user_session';
+  const regForm = document.getElementById('register-form');
+  const errorBox = document.getElementById('error-box');
+  const successBox = document.getElementById('success-box');
 
-async function register() {
-
-  const nama = document.getElementById('nama').value;
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-
-  const response = await fetch('/register', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      nama,
-      email,
-      password
-    })
-  });
-
-  const data = await response.json();
-
-  if (data.success) {
-
-    alert('Register berhasil');
-
-    window.location.href = '/login.html';
-
-  } else {
-
-    alert('Register gagal');
-
+  function clearMessages() {
+    errorBox.style.display = 'none';
+    successBox.style.display = 'none';
+    errorBox.textContent = '';
+    successBox.textContent = '';
   }
 
-}
+  function setRole(role, btn) {
+    document.getElementById('role').value = role;
 
+    document.querySelectorAll('.role-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const adminField = document.getElementById('admin-pass-field');
+    const adminInput = document.getElementById('admin_passcode');
+
+    if (role === 'admin') {
+      adminField.style.display = 'block';
+      adminInput.required = true;
+    } else {
+      adminField.style.display = 'none';
+      adminInput.required = false;
+      adminInput.value = '';
+    }
+  }
+
+  function normalizeUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+      ...user,
+      role: String(user.role || 'user').toLowerCase(),
+      name: user.name || user.nama || user.username || '',
+      email: user.email || ''
+    };
+  }
+
+  function redirectByRole(user) {
+    const role = String(user?.role || 'user').toLowerCase();
+    if (role === 'admin') {
+      window.location.assign('/admin.html');
+      return;
+    }
+    window.location.assign('/index.html');
+  }
+
+  const existing = normalizeUser((() => {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+  })());
+  if (existing) redirectByRole(existing);
+
+  regForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearMessages();
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const role = document.getElementById('role').value;
+    const adminPasscode = document.getElementById('admin_passcode').value.trim();
+
+    if (password !== confirm) {
+      errorBox.textContent = 'Konfirmasi password tidak cocok.';
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    const payload = { name, email, password, role };
+    if (role === 'admin') payload.adminPasscode = adminPasscode;
+
+    try {
+      const response = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        errorBox.textContent = data.message || 'Registrasi gagal.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const user = normalizeUser(data.user || { name, email, role });
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      successBox.textContent = 'Registrasi berhasil. Mengalihkan halaman...';
+      successBox.style.display = 'block';
+
+      setTimeout(() => redirectByRole(user), 800);
+    } catch (err) {
+      errorBox.textContent = 'Terjadi kesalahan sistem.';
+      errorBox.style.display = 'block';
+    }
+  });
 </script>
 
 </body>
