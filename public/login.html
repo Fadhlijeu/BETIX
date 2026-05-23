@@ -3,93 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BE TIX - Masuk</title>
+  <title>BETIX - Masuk</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/login.css">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    .auth-container {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: radial-gradient(circle at top right, var(--navy-light), var(--navy));
-    }
-    .auth-card {
-      background: var(--surface);
-      width: 100%;
-      max-width: 400px;
-      padding: 40px 30px;
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border);
-      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-    }
-    .auth-logo {
-      font-size: 32px;
-      font-weight: 800;
-      color: var(--text);
-      text-align: center;
-      margin-bottom: 30px;
-      letter-spacing: -1px;
-    }
-    .auth-logo span { color: var(--red); }
-    .form-group { margin-bottom: 20px; }
-    .form-group label {
-      display: block;
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-    .form-input {
-      width: 100%;
-      background: var(--navy-mid);
-      border: 1px solid var(--border);
-      padding: 14px 16px;
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 16px;
-      transition: border-color 0.3s;
-    }
-    .form-input:focus {
-      outline: none;
-      border-color: var(--red);
-    }
-    .btn-auth {
-      width: 100%;
-      background: var(--red);
-      color: white;
-      border: none;
-      padding: 16px;
-      border-radius: var(--radius);
-      font-weight: 700;
-      font-size: 16px;
-      cursor: pointer;
-      margin-top: 10px;
-      transition: background 0.3s;
-    }
-    .btn-auth:hover { background: var(--red-dark); }
-    .auth-footer {
-      text-align: center;
-      margin-top: 25px;
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-    .auth-footer a {
-      color: var(--red);
-      text-decoration: none;
-      font-weight: 600;
-    }
-    .error-msg {
-      background: rgba(230, 57, 70, 0.1);
-      color: var(--red);
-      padding: 12px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      margin-bottom: 20px;
-      display: none;
-      text-align: center;
-    }
-  </style>
+
 </head>
 <body>
 

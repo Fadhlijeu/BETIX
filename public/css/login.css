@@ -1,0 +1,262 @@
+/* =========================================
+   BE TIX — Login Page
+========================================= */
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  overflow: auto;
+}
+
+body {
+  margin: 0;
+}
+
+.auth-container {
+  width: 100%;
+  min-height: 100dvh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background:
+    radial-gradient(circle at top right,
+    rgba(124,58,237,0.15),
+    transparent 30%),
+    radial-gradient(circle at bottom left,
+    rgba(230,57,70,0.12),
+    transparent 30%),
+    var(--navy);
+}
+
+.auth-card {
+  background: rgba(22, 22, 58, 0.92);
+  backdrop-filter: blur(14px);
+
+  width: 100%;
+  max-width: 460px;
+
+  padding: 40px 30px;
+
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: '';
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255,255,255,0.04),
+      transparent 40%
+    );
+
+  pointer-events: none;
+}
+
+.auth-logo {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text);
+
+  text-align: center;
+  margin-bottom: 30px;
+
+  letter-spacing: -1px;
+}
+
+.auth-logo span {
+  color: var(--red);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+
+  background: var(--navy-mid);
+  border: 1px solid var(--border);
+
+  padding: 14px 16px;
+  border-radius: var(--radius);
+
+  color: var(--text);
+  font-size: 16px;
+
+  transition:
+    border-color 0.3s,
+    background 0.3s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--red);
+  background: var(--surface2);
+}
+
+.btn-auth {
+  width: 100%;
+
+  background: var(--red);
+  color: white;
+
+  border: none;
+  border-radius: var(--radius);
+
+  padding: 16px;
+
+  font-size: 16px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  margin-top: 10px;
+
+  transition:
+    background 0.3s,
+    transform 0.15s;
+}
+
+.btn-auth:hover {
+  background: var(--red-dark);
+}
+
+.btn-auth:active {
+  transform: scale(0.98);
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 25px;
+
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.auth-footer a {
+  color: var(--red);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.error-msg {
+  background: rgba(230, 57, 70, 0.1);
+
+  color: var(--red);
+
+  padding: 12px;
+  border-radius: var(--radius-sm);
+
+  font-size: 14px;
+  text-align: center;
+
+  margin-bottom: 20px;
+
+  display: none;
+}
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media screen and (max-width: 480px) {
+
+  .auth-container {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .auth-card {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+
+  .auth-logo {
+    font-size: 28px;
+    margin-bottom: 24px;
+  }
+
+  .form-input {
+    padding: 13px 14px;
+    font-size: 15px;
+  }
+
+  .btn-auth {
+    padding: 14px;
+    font-size: 15px;
+  }
+
+  .auth-footer {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+@media screen and (min-width: 768px) {
+
+  .auth-card {
+    max-width: 460px;
+    padding: 48px 40px;
+  }
+
+  .auth-logo {
+    font-size: 38px;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+
+  .auth-container {
+    padding: 40px;
+  }
+
+  .auth-card {
+    max-width: 500px;
+    padding: 56px 48px;
+    border-radius: 28px;
+  }
+
+  .auth-logo {
+    font-size: 42px;
+    margin-bottom: 36px;
+  }
+
+  .form-group label {
+    font-size: 15px;
+  }
+
+  .form-input {
+    padding: 16px 18px;
+  }
+
+  .btn-auth {
+    padding: 18px;
+    font-size: 17px;
+  }
+
+  .auth-footer {
+    font-size: 15px;
+  }
+}

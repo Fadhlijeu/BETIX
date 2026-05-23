@@ -6,7 +6,7 @@ async function main() {
     host: "127.0.0.1",
     user: "root",
     password: "",
-    database: "bioskop_db"
+    database: "betix_db"
   });
 
   const [tables] = await pool.query("SHOW TABLES");

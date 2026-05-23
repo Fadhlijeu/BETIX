@@ -59,6 +59,13 @@
     state.currentPage = pageId;
     showPage(pageId);
 
+    // update URL hash
+    if (!options.replace) {
+      history.pushState({}, '', `#${page}`);
+    } else {
+      history.replaceState({}, '', `#${page}`);
+}
+
     const navEl = options.el || document.querySelector(`.nav-item[data-page="${page}"]`) || document.getElementById(`btn-${page}`);
     setActiveNav(page, navEl, !!options.isBottom);
 
@@ -160,7 +167,29 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    syncInitialPage();
+
+    const hash = window.location.hash.replace('#', '');
+
+    if (hash) {
+      navigateTo(hash, { replace: true });
+    } else {
+      syncInitialPage();
+      navigateTo('beranda', { replace: true });
+    }
+
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+    const hash = window.location.hash.replace('#', '');
+
+    if (hash) {
+      navigateTo(hash, { replace: true });
+    } else {
+      syncInitialPage();
+      navigateTo('beranda', { replace: true });
+    }
+
   });
 
   window.navigateTo = navigateTo;
